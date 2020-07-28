@@ -1,0 +1,901 @@
+---
+title: "Field survey JULY 2020 GITHUB VERSION"
+author: "tara"
+date: "6/12/2020"
+output:
+  html_document: 
+    highlight: tango
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, cache=TRUE)
+```
+
+## R Markdown
+
+This is the Field Survey Data half of the Bayesgamsattemps3.Rmd. I've decided to split them up to keep things organized. 
+
+**In this version 5 we are not looking at differences between cohorts in mortality - in fact the cohort analysis has been separated into a different r markdown file**
+
+## Hypotheses ##
+1. - bays have different mortality from each other. 
+2. - bays have consistent mortality across years. We know this isn't true because of recruitment variability, but I want to show that some bays are better or worse nurseries than others. 
+3. - cohorts have different mortality from each other (within a bay).
+4. - cohorts have different mortality from each other across years - the idea of bet hedging, within a bay sometimes the early cohort does better, sometimes late. 
+5. - cohorts have the same mortality across bays and within years: so, for example, in 2016 maybe the early cohort in both mattituck and shinnecock did well. We can't really assess this because we don't have enough years or bays with multiple cohorts, but this is a discussion point, and we reference Sogard and Manderson (separate papers)
+6. - Bays have different growth from each other (this gets at condition (environment), whereas mortality gets more directly at predation.)
+7. - cohorts have different growth from each other. (again with the bet hedging but this time for warm late summers. Reference our former paper about warm spring vs. warm winter etc.)
+8. abundance when present is driven by environmental conditions - So this is a tough one to prove with GAMS because it would have to be about differences between where they are caught and where they are not caught on the same day. this is assuming some kind of behavioral preference for conditions. [we have to remember to limit the comparison to only daytime temperature]. When we are thinking about differences between bays for mortality and growth, can those be explained by differences in environmental data? well on that day doesn't matter so much as everything that has happened up until that day. Or some interaction of changes in environmental data and time, like does it get hotter in Jamaica sooner? This would be best solved with access to continous environmental monitoring data which I don't have. 
+
+**Setup:**
+- mortality is different in different bays --> slope has to do with natural mortality --> can't separate out predation from environment --> setup for the cage paper. 
+- these fish evolved in the face of predation but the assemblage of predators is changing, habitat for hiding from predators is changing, and the timing that predators enter the estuary is changing. WF spawning has to do with lunar phase more than temperature, might be decoupled. 
+- slope of mortality curve is high, but bays (or cohorts) with faster growth have less steep mortality (check this). --> if we can get the fish out of this dangerous phase they will have a better chance. 
+- the "difference from the mean" analysis indicates selection behavior. if there isn't any, then we have more evidence for predation but have to test it in the cages. 
+- the size of the peak of abundance has to do with productivity that occurs before the survey intercepts. 
+
+
+**Some general ecology notes:**
+- obligate batch spawners, so not really a strategy per se, but generally spreading out over a period. so the idea of an "early cohort" and "late cohort" is sort of a construct because individuals are hatching constantly and growing at different rates (controlled by temperature & size dependent mortality in both larval and yoy phases). That said, there are general spikes in mating activity which could produce pulses - a safety in numbers mechanism (cite Catherine's mattituck data)
+- 
+
+
+**In this version we have used corrected catch +1 to calculate mortality slopes, and have gotten rid of the chapman-robson curves**
+*The one fish was not added at the tow level, but at the WEEK level*
+the chapman robson curves can be found in the bayesgamsattempt2.Rmd script. 
+
+This builds off the data wrangling done in the Rscript 'bayesgamsattempt.R' and baysgams_prep.RMD'
+
+**Some useful tutorials:**
+https://www.rensvandeschoot.com/tutorials/r-linear-regression-bayesian-using-brms/ 
+https://cchecastaldo.github.io/BayesianShortCourse/Syllabus.html
+
+```{r, include=FALSE}
+#keeping everything in this folder
+setwd("/Users//tdolan/Documents//R-Github//WFFieldSurveyPaper")
+
+library("dplyr")
+library("devtools")
+library("tidyr")
+library("moments")
+library("lubridate")
+library("ggplot2")
+library("brms")
+library("purrr")
+```
+
+Load the data & some extra data minging. 
+```{r, include=FALSE}
+
+#somedata<-read.csv("skcompiled4gams2.csv", na.strings="", header=TRUE)
+somedata3<-read.csv("somedata3_Mar-4-2020.csv", na.strings="", header=TRUE)
+#drop some columns that we aren't using for now. 
+#somedata <- dplyr::select(somedata, -avl, -minl,-maxl, -sdl) #not trying to predict length yet, and there are a LOT of NA. 
+somedata4 <-dplyr::select(somedata3,-rcpT,-std_cpue,-cpue)
+
+```
+
+Mattituck Data minging & binding to other data
+The mattituck data minging is now in bayesgamesdataMing.R
+```{r, include=FALSE}
+some_mt_data <-read.csv("some_mt_data.csv", header=TRUE)
+some_mt_data <-mutate(some_mt_data, Year=as.factor(Year), catch1=cpW+1)%>%dplyr::rename(corrCatch=cpW)
+
+#the CPUE is currently aggregated to tow, but has to be aggregated to week. 
+byweek <- plyr::ddply(somedata4, Bay~Date~Year, summarize, avTemp = mean(Temp), avSAL=mean(SAL), avDO=mean(DO.mg.L), rawcatch=sum(NumCaught), corrCatch=sum(cpT),catch1=sum(cpT)+1, area=sum(area))
+
+byweek <-mutate(byweek, Year=as.factor(Year))
+byweek <-bind_rows(byweek,some_mt_data)
+
+byweek <-dplyr::select(byweek, -Week) %>% mutate(cpue=catch1/area, cpue.nc =corrCatch/area) %>% mutate(lncpue=log(cpue))%>% filter(!is.na(area)) 
+
+#create day- year since common start date because it's not plotting them lined up. 
+byweek <-separate(byweek, Date, c("year","m","d"), remove=FALSE) %>%unite(col="Day",m,d, sep="-") 
+
+
+```
+
+Total effort and capture table
+```{r}
+bayear <- plyr::ddply(byweek, Bay~Year, summarize, catch=sum(rawcatch), area.swept=sum(area), area=sum(area),average.CPUE=mean(cpue))
+mtcatch <-plyr::ddply(some_mt_data, ~Year, summarize, catch=sum(corrCatch), area=sum(area))
+```
+
+### CPUE Plots ###
+
+KEEPING THE LARGER PEAK 
+adapted from the script "field graphs 9_10_19.R"
+We are counting the peak as the PEAK and the slope as days since the peak, which is day 0. If you want to change this, alter this chunk. 
+```{r, include=FALSE, fig.align='center', echo=FALSE}
+#edays and week function
+eday <- function(df){
+  edays <-c()
+  Week <-c()
+for (i in 2:length(df$Date)){
+  edays[i] <-df$Date[i]-df$Date[1]}
+edays[1] <-0
+Week <-rownames(df)
+df <-cbind(df,edays,Week)
+}
+
+
+#days elapsed since peak function
+ppp <- function(df){
+past.peak <-c()
+pp <-filter(df, !is.na(peak))
+for (i in 2:length(pp$Date)){
+  past.peak[i] <-pp$Date[i]-pp$Date[1]}
+past.peak[1] <-0
+pp <-cbind(pp, past.peak)
+df <-full_join(df,pp)
+}
+
+byweek <-mutate(byweek, Date=as.Date(Date))
+#honestly its probably easier to create separate dataframes for each. 
+#Shinnecock 2016
+Sh_16 <- filter(byweek, Bay=="Shinnecock", Year== "2016") %>% mutate(Date=as.Date(Date))
+Sh_16 <-eday(Sh_16) %>% mutate(Week=as.numeric(as.character(Week))) %>% mutate(peak=ifelse(Week >= 8, Day,NA)) #second peak is bigger.
+Sh_16 <-ppp(Sh_16)
+#Shinnecock 2017
+Sh_17 <- filter(byweek, Bay=="Shinnecock", Year== "2017") %>% mutate(Date=as.Date(Date))
+Sh_17 <-eday(Sh_17)%>% mutate(Week=as.numeric(as.character(Week))) %>% mutate(peak=ifelse(Week >= 4, Day,NA)) #larger peak. 
+Sh_17 <-ppp(Sh_17)
+#Shinnecock 2011
+Sh_11 <- filter(byweek, Bay=="Shinnecock", Year== "2011") %>% mutate(Date=as.Date(Date))
+Sh_11 <-eday(Sh_11)%>% mutate(Week=as.numeric(as.character(Week))) %>% mutate(peak=ifelse(Week >= 6, Day,NA)) #Keep larger peak 
+Sh_11 <-ppp(Sh_11)
+#Shinnecock 2010
+Sh_10 <- filter(byweek, Bay=="Shinnecock", Year== "2010") %>% mutate(Date=as.Date(Date))
+Sh_10 <-eday(Sh_10)%>% mutate(Week=as.numeric(as.character(Week))) %>% mutate(peak=ifelse(Week >= 2, Day,NA)) #keep larger peak. 
+Sh_10 <-ppp(Sh_10)
+#Shinnecock all years
+Sh_all <-bind_rows(Sh_16,Sh_17,Sh_10,Sh_11)
+
+#Napeague 2016
+N_16 <- filter(byweek, Bay=="Napeague", Year== "2016") %>% mutate(Date=as.Date(Date))
+N_16 <-eday(N_16)%>% mutate(Week=as.numeric(as.character(Week))) %>% mutate(peak=ifelse(Week >= 5, Day,NA))
+N_16 <-ppp(N_16)
+#Napeague 2010
+N_10 <- filter(byweek, Bay=="Napeague", Year== "2010") %>% mutate(Date=as.Date(Date))
+N_10 <-eday(N_10)%>% mutate(Week=as.numeric(as.character(Week))) %>% mutate(peak=ifelse(Week >= 1,Day,NA))
+N_10 <-ppp(N_10)
+#Napeague all years
+N_all <-bind_rows(N_16, N_10)
+
+#Moriches 2016
+M_16 <- filter(byweek, Bay=="Moriches", Year== "2016") %>% mutate(Date=as.Date(Date))
+M_16 <-eday(M_16)%>% mutate(Week=as.numeric(as.character(Week))) %>% mutate(peak=ifelse(Week >= 5,Day,NA))
+M_16 <-ppp(M_16)
+#Moriches 2011
+M_11 <- filter(byweek, Bay=="Moriches", Year== "2011") %>% mutate(Date=as.Date(Date))
+M_11 <-eday(M_11)%>% mutate(Week=as.numeric(as.character(Week))) %>% mutate(peak=ifelse(Week >= 3, Day,NA))
+M_11 <-ppp(M_11)
+#Moriches 2010
+M_10 <- filter(byweek, Bay=="Moriches", Year== "2010") %>% mutate(Date=as.Date(Date))
+M_10 <-eday(M_10)%>% mutate(Week=as.numeric(as.character(Week))) %>% mutate(peak=ifelse(Week >= 2, Day,NA))
+M_10 <-ppp(M_10)
+#All Moriches
+M_all <- bind_rows(M_16, M_11, M_10)
+
+#Jamaica 2016
+J_16 <- filter(byweek, Bay=="Jamaica", Year== "2016") %>% mutate(Date=as.Date(Date))
+J_16 <-eday(J_16)%>% mutate(Week=as.numeric(as.character(Week))) %>% mutate(peak=ifelse(Week >= 1, Day,NA))
+J_16 <-ppp(J_16)
+#Jamaica 2011
+J_11 <- filter(byweek, Bay=="Jamaica", Year== "2011") %>% mutate(Date=as.Date(Date))
+J_11 <-eday(J_11) %>% mutate(Week=as.numeric(as.character(Week))) %>% mutate(peak=ifelse(Week >=2, Day,NA))
+J_11 <-ppp(J_11)
+#Jamaica 2010
+J_10 <- filter(byweek, Bay=="Jamaica", Year== "2010") %>% mutate(Date=as.Date(Date))
+J_10 <-eday(J_10)%>% mutate(Week=as.numeric(as.character(Week))) %>% mutate(peak=ifelse(Week >=1, Day,NA))
+J_10 <-ppp(J_10)
+#All Jamaica
+J_all <-bind_rows(J_16,J_11,J_10)
+
+#Cold Spring Pond 2010
+C_10 <- filter(byweek, Bay=="Cold Spring Pond", Year== "2010") %>% mutate(Date=as.Date(Date))
+C_10 <-eday(C_10) %>% mutate(Week=as.numeric(as.character(Week))) %>% mutate(peak=ifelse(Week >= 3, Day,NA))
+C_10 <-ppp(C_10)
+
+#Mattituck 2016
+Mt_16 <- filter(byweek, Bay=="Mattituck", Year== "2016") %>% mutate(Date=as.Date(Date))
+Mt_16 <-eday(Mt_16) %>% mutate(Week=as.numeric(as.character(Week))) %>% mutate(peak=ifelse(Week >= 4,Day,NA))
+Mt_16 <-ppp(Mt_16)
+#Mattituck 2015
+Mt_15 <- filter(byweek, Bay=="Mattituck", Year== "2015") %>% mutate(Date=as.Date(Date))
+Mt_15 <-eday(Mt_15)%>% mutate(Week=as.numeric(as.character(Week))) %>% mutate(peak=ifelse(Week >= 2, Day,NA))
+Mt_15 <-ppp(Mt_15)
+Mt_all <-bind_rows(Mt_16,Mt_15)
+
+```
+
+**Graph abundance for all years and bays:**
+You should add Mattituck in at some point, even though you don't have environmental data for it. 
+```{r,fig.align='center', echo=FALSE}
+#2017
+seventeen <-Sh_17%>% mutate(Date=as.Date(Date),Week=as.integer(Week))
+sunnycolors <-c("#5bd0c8")
+seven <-  ggplot(data=seventeen, aes(x=Date, y=lncpue,color=Bay))+ geom_point(aes(colour = Bay))
+seven + scale_colour_manual(name = "Bay",values = sunnycolors)+
+  stat_smooth (data = subset(seventeen, Bay=="Shinnecock" & Week >=4), method='lm',se=TRUE, size=0.7, level=0.95,fill ="#5bd0c8",alpha = 0.08, color="#5bd0c8", show.legend=TRUE)+
+  ggpubr::rotate_x_text()+
+  ylim(-10,0)+ylab("LN CPUE")+
+ggtitle("2017")+
+theme_classic()
+#ggsave("mortality2017a.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#dev.off()
+
+#2016
+sixteen <-bind_rows(J_16,M_16,Mt_16,N_16,Sh_16)%>% mutate(Date=as.Date(Date),Week=as.integer(Week))
+sunnycolors <-c("#ec4847","#6600ff","#e6df44", "#061283", "#5bd0c8")
+six <-  ggplot(data=sixteen, aes(x=Date, y=lncpue,color=Bay))+ geom_point(aes(colour = Bay))
+six + scale_colour_manual(name = "Bay",values = sunnycolors)+
+  stat_smooth (data = subset(sixteen, Bay=="Jamaica" & Week >=1), method='lm', se=TRUE, size=0.7, level=0.95,fill ="#ec4847",alpha = 0.08, color="#ec4847", show.legend=TRUE)+
+  geom_smooth (data = subset(sixteen, Bay=="Moriches"& Week >=5), method='lm', se=TRUE, size=0.7, level=0.95,fill ="#e6df44",alpha = 0.08,  color="#e6df44", show.legend=TRUE)+
+  geom_smooth (data = subset(sixteen, Bay=="Mattituck"& Week >=4), method='lm',se=TRUE, size=0.7, level=0.95,fill ="#6600ff",alpha = 0.08,  color="#6600ff", show.legend=TRUE)+
+  geom_smooth (data = subset(sixteen, Bay=="Napeague"& Week >=5), method='lm', se=TRUE, size=0.7, level=0.95,fill ="#061283",alpha = 0.08,  color="#061283", show.legend=TRUE)+
+  geom_smooth (data = subset(sixteen, Bay=="Shinnecock"& Week >=8), method='lm', se=TRUE, size=0.7, level=0.95,fill ="#5bd0c8",alpha = 0.08,  color="#5bd0c8", show.legend=TRUE)+
+  ggpubr::rotate_x_text()+
+   ylim(-10,0)+ylab("LN CPUE")+
+ggtitle("2016")+
+theme_classic()
+#ggsave("mortality2016a.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#dev.off()
+  
+#2015
+fifteen <-Mt_15%>% mutate(Date=as.Date(Date),Week=as.integer(Week))
+sunnycolors <-c("#6600ff")
+seven <-  ggplot(data=fifteen, aes(x=Day, y=lncpue,color=Bay))+ geom_point(aes(colour = Bay))
+seven + scale_colour_manual(name = "Bay",values = sunnycolors)+
+  stat_smooth (data = subset(fifteen, Bay=="Mattituck" & Week >=2), method='lm', se=TRUE, size=0.7, level=0.95,fill ="#6600ff",alpha = 0.08, color="#6600ff", show.legend=TRUE)+
+  ggpubr::rotate_x_text()+
+   ylim(-10,0)+ylab("LN CPUE")+
+ggtitle("2015")+
+theme_classic()
+#ggsave("mortality2015a.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#dev.off()  
+
+#2011
+eleven <-bind_rows(J_11,M_11,Sh_11)%>% mutate(Date=as.Date(Date),Week=as.integer(Week))
+sunnycolors <-c("#ec4847","#e6df44", "#5bd0c8")
+ele <-  ggplot(data=eleven, aes(x=Date, y=lncpue,color=Bay))+ geom_point(aes(colour = Bay))
+ele + scale_colour_manual(name = "Bay",values = sunnycolors)+
+  stat_smooth (data = subset(eleven, Bay=="Jamaica" & Week >=2), method='lm', se=TRUE, size=0.7, level=0.95,fill ="#ec4847",alpha = 0.08, color="#ec4847", show.legend=TRUE)+
+  geom_smooth (data = subset(eleven, Bay=="Moriches"& Week >=3), method='lm', se=TRUE, size=0.7, level=0.95,fill ="#e6df44",alpha = 0.08, color="#e6df44", show.legend=TRUE)+
+  geom_smooth (data = subset(eleven, Bay=="Shinnecock"& Week >=6), method='lm', se=TRUE, size=0.7, level=0.95,fill ="#5bd0c8",alpha = 0.08, color="#5bd0c8", show.legend=TRUE)+
+  ggpubr::rotate_x_text()+
+   ylim(-10,0)+ylab("LN CPUE")+
+ggtitle("2011")+
+theme_classic()
+#ggsave("mortality2011a.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#dev.off()
+
+#2010
+ten <-bind_rows(C_10, J_10,M_10,N_10,Sh_10)%>% mutate(Date=as.Date(Date),Week=as.integer(Week))
+sunnycolors <-c("#006600","#ec4847","#e6df44", "#061283", "#5bd0c8")
+te <-  ggplot(data=ten, aes(x=Date, y=lncpue))+ geom_point(aes(color = Bay))
+te + scale_colour_manual(name = "Bay",values = sunnycolors)+
+  stat_smooth (data = subset(ten, Bay=="Jamaica" & Week >=1), method='lm', se=TRUE, size=0.7, level=0.95,fill ="#ec4847",alpha = 0.08, color="#ec4847", show.legend=TRUE)+
+  geom_smooth (data = subset(ten, Bay=="Moriches"& Week >=2), method='lm', se=TRUE, size=0.7,level=0.95,fill="#e6df44", alpha = 0.08,color="#e6df44", show.legend=TRUE)+
+  geom_smooth (data = subset(ten, Bay=="Napeague"& Week >=1), method='lm', se=TRUE, size=0.7,level=0.95, fill="#061283", alpha = 0.08,color="#061283", show.legend=TRUE)+
+  geom_smooth (data = subset(ten, Bay=="Shinnecock"& Week >=2), method='lm', se=TRUE, size=0.7,level=0.95,fill="#5bd0c8",alpha = 0.08, color="#5bd0c8", show.legend=TRUE)+
+  geom_smooth (data = subset(ten, Bay=="Cold Spring Pond"& Week >=3), method='lm', se=TRUE, level=0.95,fill="#006600",alpha = 0.08, size=0.7, color="#006600", show.legend=TRUE)+
+  ggpubr::rotate_x_text()+
+  ylim(-10,0)+ylab("LN CPUE")+
+ggtitle("2010")+
+theme_classic()
+#ggsave("mortality2010a.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#dev.off()
+
+par(mfrow=c(2,4))
+
+#Make a little table of Rsquared values to put for each line.
+```
+
+
+Make sure that the regression is truely going from the descending limb
+ 
+**Extract coefficients from the regression for each bay and year**
+Linear regression for each bay and year
+```{r}
+alledays <-bind_rows(seventeen,sixteen,fifteen,eleven,ten)%>% unite(BayYear, Bay,Year, sep="_", remove=FALSE) %>%mutate(BayYear=as.factor(BayYear))
+alledays.naomit <-filter(alledays, !is.na(past.peak))
+
+#function to extract model p.value
+lmp <- function (modelobject) {
+    if (class(modelobject) != "lm") stop("Not an object of class 'lm' ")
+    f <- summary(modelobject)$fstatistic
+    p <- pf(f[1],f[2],f[3],lower.tail=F)
+    attributes(p) <- NULL
+    return(p)}
+
+#split dataframe into a list of multiple data frames
+models <-alledays.naomit %>% base::split(.$BayYear)%>%
+ purrr::map(function(df) lm(lncpue~past.peak,data = df))
+
+f <-models %>% map(summary) %>% map_dbl(~.$coefficients[2]) #slope
+g <-models %>% map(summary) %>% map_dbl(~.$coefficients[4]) #std error of the slope
+h <-models %>% map(summary) %>% map_dbl(~.$coefficients[6]) #t value of the slope
+i <-models %>% map(summary) %>% map_dbl(~.$coefficients[8]) #p value of the slope
+j <-models %>% map(confint) %>% map_dbl(~.[2]) #LCI of slope
+k <-models %>% map(confint) %>% map_dbl(~.[4]) #UCI of slope
+a <-models %>% map(summary) %>% map_dbl(~.$adj.r.squared) #r squared
+b <-models %>% map(summary) %>% map_dbl(~.$coefficients[1])#y intercept
+c <-models %>% map(summary) %>% map_dbl(~.$fstatistic[1]) #f statistic
+d <-models %>% map(summary) %>% map_dbl(~.$df[2])
+e <-models %>% map_dbl(lmp) #p value
+
+est_list <-list(f,g,h,i,j,k,a,b,c,d,e)
+ests <-do.call("rbind",est_list)
+rownames(ests) <-c("slope","std.err.slope","t.value.slope","p.val.slope","LCI.slope","UCI.slope","adj.r.sq","y.int","f.stat","dof","p.val")
+ests <- as.data.frame(t(ests))
+ests<-as.data.frame(tibble::rownames_to_column(ests, var ="SplitVar"))
+```
+ 
+ ## Dummy Regression to compare statistical significance of catch curves ##
+
+See the script "catchcurvehelp2.Rmd" but basically, we have found that within bay and within year comparisons are uninteresting with regards to slope.
+ **all possible interactions**
+```{r}
+options(contrasts = c("contr.sum", "contr.poly")) # a sum to zero contrast.
+#options(contrasts = c("contr.treatment", "contr.poly"))
+ #all
+anovall <- lm(lncpue~past.peak*Bay*Year,na.action=na.omit, data=alledays)
+
+ano <-car::Anova(anovall)
+ano
+```
+
+ Since there is no interaction between past.peak:Bay or past.peak:Year there is no modification of the slope by either bay or year. We can test the combined bayyear
+
+**BayYear test**
+```{r}
+anovall2 <-lm(lncpue~past.peak*BayYear, na.action=na.omit, data=alledays)
+ano2 <-car::Anova(anovall2)
+ano2
+```
+
+
+**Tukey HSD to extract differences between the intercepts**
+```{r}
+#105 possible comparisons, bonferroni correction. -->0.00047619
+library(agricolae)
+df<-df.residual(anovall2)
+MSerror<-deviance(anovall2)/df
+comparison <- HSD.test(anovall2,c("BayYear"),MSerror=MSerror, unbalanced=TRUE,alpha=0.00047619, group=TRUE)
+comparison
+```
+ 
+**The LS means way**
+not including this in the paper because the other one was not significant
+```{r}
+library("lsmeans")
+by <-lm(lncpue~past.peak*BayYear,na.action=na.omit, data=alledays)
+anova(by)
+#coefficients
+by$coefficients
+#trends
+by.list <-lstrends(by,"BayYear", var="past.peak")
+#compare slopes
+bonf.alpha <-0.05/105
+bonf.alpha
+p <- as.data.frame(pairs(by.list)) %>% mutate(sigp = ifelse(p.value <= bonf.alpha,"sig","not sig"))
+p
+```
+This worked great, but I think it's not appropriate to do all of them. 
+So I think we report this and continue on? 
+```{r}
+typing.lsm = lsmeans(by, pairwise ~ BayYear, glhargs=list())
+par(cex.lab=0.5)
+plot(typing.lsm[[2]])
+```
+
+Do we also need to do the by bay and by year comparisons? 
+
+## Extract and tabulate parameters from each Bay and Year ##
+We are no longer using the Chapman-Robson method. We are now using the LM method and the slope will be days since peak. 
+we will use the regression method to extract the adjusted R squared and Y intercept estimate & F statistic from the models. 
+The only thing we will use the regressions for is to make the groups. 
+```{r, include=FALSE}
+library("FSA")
+
+#Shin 2017
+Sh_17 <-mutate(Sh_17, edays=as.numeric(as.character(edays)), std_catch= (catch1/area)*1000)
+cc_reg <-catchCurve(cpue~edays,data=Sh_17, ages2use=20:83)
+summary(cc_reg, verbose=TRUE)
+ccSh_17 <-as.data.frame(summary(cc_reg)) 
+ccSh_17 <-tibble::rownames_to_column(ccSh_17,"estimator") %>%mutate(Bay="Shinnecock", Year ="2017")
+con <-as.data.frame(confint(cc_reg))
+ccSh_17 <-bind_cols(ccSh_17,con)
+
+#Shin 2017 the lm way. 
+cl_reg <-lm(lncpue~past.peak,data=Sh_17, na.action=na.omit)
+summary(cl_reg)
+# It's like the same, with rounding error, so we can use the FSA version. 
+
+#Shin 2016
+Sh_16 <-mutate(Sh_16, edays=as.numeric(as.character(edays)), std_catch= (catch1/area)*1000)
+cc_reg <-catchCurve(cpue~edays,data=Sh_16, ages2use=56:105)
+summary(cc_reg, verbose=TRUE)
+ccSh_16 <-as.data.frame(summary(cc_reg)) 
+ccSh_16 <-tibble::rownames_to_column(ccSh_16,"estimator") %>%mutate(Bay="Shinnecock", Year ="2016")
+con <-as.data.frame(confint(cc_reg))
+ccSh_16 <-bind_cols(ccSh_16,con)
+
+
+#Shin 2011
+Sh_11 <-mutate(Sh_11, edays=as.numeric(as.character(edays)), std_catch= (catch1/area)*1000)
+cc_reg <-catchCurve(cpue~edays,data=Sh_11, ages2use=79:144)
+summary(cc_reg, verbose=TRUE)
+ccSh_11 <-as.data.frame(summary(cc_reg)) 
+ccSh_11 <-tibble::rownames_to_column(ccSh_11,"estimator") %>%mutate(Bay="Shinnecock", Year ="2011")
+con <-as.data.frame(confint(cc_reg))
+ccSh_11 <-bind_cols(ccSh_11,con)
+
+
+#Shin 2010 - we're using the day after the peak, for consistency with regression before. 
+Sh_10 <-mutate(Sh_10, edays=as.numeric(as.character(edays)), std_catch= (catch1/area)*1000)
+cc_reg <-catchCurve(cpue~edays,data=Sh_10, ages2use=18:125)
+summary(cc_reg, verbose=TRUE)
+ccSh_10 <-as.data.frame(summary(cc_reg)) 
+ccSh_10 <-tibble::rownames_to_column(ccSh_10,"estimator") %>%mutate(Bay="Shinnecock", Year ="2010")
+con <-as.data.frame(confint(cc_reg))
+ccSh_10 <-bind_cols(ccSh_10,con)
+
+#Napeague 2016
+N_16 <-mutate(N_16, edays=as.numeric(as.character(edays)), std_catch= (catch1/area)*1000)
+cc_reg <-catchCurve(cpue~edays,data=N_16, ages2use=27:75)
+summary(cc_reg, verbose=TRUE)
+ccN_16 <-as.data.frame(summary(cc_reg)) 
+ccN_16 <-tibble::rownames_to_column(ccN_16,"estimator") %>%mutate(Bay="Napeague", Year ="2016")
+con <-as.data.frame(confint(cc_reg))
+ccN_16 <-bind_cols(ccN_16,con)
+
+#Napeague 2010
+N_10 <-mutate(N_10, edays=as.numeric(as.character(edays)), std_catch= (catch1/area)*1000)
+cc_reg <-catchCurve(cpue~edays,data=N_10, ages2use=0:112)
+summary(cc_reg, verbose=TRUE)
+ccN_10 <-as.data.frame(summary(cc_reg)) 
+ccN_10 <-tibble::rownames_to_column(ccN_10,"estimator") %>%mutate(Bay="Napeague", Year ="2010")
+con <-as.data.frame(confint(cc_reg))
+ccN_10 <-bind_cols(ccN_10,con)
+
+#Mattituck 2016
+Mt_16 <-mutate(Mt_16, edays=as.numeric(as.character(edays)), std_catch= (catch1/area)*1000)
+cc_reg <-catchCurve(cpue~edays,data=Mt_16, ages2use=45:99)
+summary(cc_reg, verbose=TRUE)
+ccMt_16 <-as.data.frame(summary(cc_reg)) 
+ccMt_16 <-tibble::rownames_to_column(ccMt_16,"estimator") %>%mutate(Bay="Mattituck", Year ="2016")
+con <-as.data.frame(confint(cc_reg))
+ccMt_16 <-bind_cols(ccMt_16,con)
+
+#Mattituck 2015
+Mt_15 <-mutate(Mt_15, edays=as.numeric(as.character(edays)), std_catch= (catch1/area)*1000)
+cc_reg <-catchCurve(cpue~edays,data=Mt_15, ages2use=13:69)
+summary(cc_reg, verbose=TRUE)
+ccMt_15 <-as.data.frame(summary(cc_reg)) 
+ccMt_15 <-tibble::rownames_to_column(ccMt_15,"estimator") %>%mutate(Bay="Mattituck", Year ="2015")
+con <-as.data.frame(confint(cc_reg))
+ccMt_15 <-bind_cols(ccMt_15,con)
+
+#Moriches 2016
+M_16 <-mutate(M_16, edays=as.numeric(as.character(edays)), std_catch= (catch1/area)*1000)
+cc_reg <-catchCurve(cpue~edays,data=M_16, ages2use=30:92)
+summary(cc_reg, verbose=TRUE)
+ccM_16 <-as.data.frame(summary(cc_reg)) 
+ccM_16 <-tibble::rownames_to_column(ccM_16,"estimator") %>%mutate(Bay="Moriches", Year ="2016")
+con <-as.data.frame(confint(cc_reg))
+ccM_16 <-bind_cols(ccM_16,con)
+
+#Moriches 2011
+M_11 <-mutate(M_11, edays=as.numeric(as.character(edays)), std_catch= (catch1/area)*1000)
+cc_reg <-catchCurve(cpue~edays,data=M_11, ages2use=35:101)
+summary(cc_reg, verbose=TRUE)
+ccM_11 <-as.data.frame(summary(cc_reg)) 
+ccM_11 <-tibble::rownames_to_column(ccM_11,"estimator") %>%mutate(Bay="Moriches", Year ="2011")
+con <-as.data.frame(confint(cc_reg))
+ccM_11 <-bind_cols(ccM_11,con)
+
+#Moriches 2010
+M_10 <-mutate(M_10, edays=as.numeric(as.character(edays)), std_catch= (catch1/area)*1000)
+cc_reg <-catchCurve(cpue~edays,data=M_10, ages2use=16:126)
+summary(cc_reg, verbose=TRUE)
+ccM_10 <-as.data.frame(summary(cc_reg)) 
+ccM_10 <-tibble::rownames_to_column(ccM_10,"estimator") %>%mutate(Bay="Moriches", Year ="2010")
+con <-as.data.frame(confint(cc_reg))
+ccM_10 <-bind_cols(ccM_10,con)
+
+#Jamaica 2016
+J_16 <-mutate(J_16, edays=as.numeric(as.character(edays)), std_catch= (catch1/area)*1000)
+cc_reg <-catchCurve(cpue~edays,data=J_16, ages2use=0:49)
+summary(cc_reg, verbose=TRUE)
+ccJ_16 <-as.data.frame(summary(cc_reg)) 
+ccJ_16 <-tibble::rownames_to_column(ccJ_16,"estimator") %>%mutate(Bay="Jamaica", Year ="2016")
+con <-as.data.frame(confint(cc_reg))
+ccJ_16 <-bind_cols(ccJ_16,con)
+
+#Jamaica 2011 
+J_11 <-mutate(J_11, edays=as.numeric(as.character(edays)), std_catch= (catch1/area)*1000)
+cc_reg <-catchCurve(cpue~edays,data=J_11, ages2use=28:110)
+summary(cc_reg, verbose=TRUE)
+ccJ_11 <-as.data.frame(summary(cc_reg)) 
+ccJ_11 <-tibble::rownames_to_column(ccJ_11,"estimator") %>%mutate(Bay="Jamaica", Year ="2011")
+con <-as.data.frame(confint(cc_reg))
+ccJ_11 <-bind_cols(ccJ_11,con)
+
+
+#Jamaica 2010
+J_10 <-mutate(J_10, edays=as.numeric(as.character(edays)), std_catch= (catch1/area)*1000)
+cc_reg <-catchCurve(cpue~edays,data=J_10, ages2use=0:72)
+summary(cc_reg, verbose=TRUE)
+ccJ_10 <-as.data.frame(summary(cc_reg)) 
+ccJ_10 <-tibble::rownames_to_column(ccJ_10,"estimator") %>%mutate(Bay="Jamaica", Year ="2010")
+con <-as.data.frame(confint(cc_reg))
+ccJ_10 <-bind_cols(ccJ_10,con)
+
+
+#Cold Spring Pond 2010
+C_10 <-mutate(C_10, edays=as.numeric(as.character(edays)), std_catch= (catch1/area)*1000)
+cc_reg <-catchCurve(cpue~edays,data=C_10, ages2use=34:91)
+summary(cc_reg, verbose=TRUE)
+ccC_10 <-as.data.frame(summary(cc_reg)) 
+ccC_10 <-tibble::rownames_to_column(ccC_10,"estimator") %>%mutate(Bay="Cold Spring Pond", Year ="2010")
+con <-as.data.frame(confint(cc_reg))
+ccC_10 <-bind_cols(ccC_10,con)
+
+
+catchcurve_results <-bind_rows(ccSh_17,ccSh_16,ccSh_11,ccSh_10,ccN_16, ccN_10, ccMt_16, ccMt_15, ccM_16,ccM_11,ccM_10,ccJ_16,ccJ_11,ccJ_10,ccC_10)
+
+#catchcurve_results <-arrange(catchcurve_results, estimator) %>% group_by(Year) %>% arrange(Bay)
+ccA <-filter(catchcurve_results, estimator=="A") %>% group_by(Bay) %>% arrange(Year)
+ccZ <-filter(catchcurve_results, estimator=="Z") %>% group_by(Bay) %>% arrange(Year)
+ccZyr<-filter(catchcurve_results, estimator=="Z") %>% group_by(Year) %>% arrange(Bay)
+```
+Results table
+```{r tables-catchcuve_results}
+knitr::kable(ccZ, caption="Instantaneous mortality (Z)")
+knitr::kable(ccZyr, caption="Instantaneous mortality (Z)")
+knitr::kable(ccA, caption="Annual mortality (A %)")
+```
+
+**plot the estimates with their CI as barplot?** 
+```{r}
+sunnycolors <-c("#006600","#ec4847","#6600ff", "#e6df44", "#061283", "#5bd0c8")
+drabcolors <-c("#f6eff7","#d0d1e6","#a6bddb", "#67a9cf", "#1c9099", "#016450")
+ccZ <-as.data.frame(ccZ)%>% unite(BayYear, Bay, Year, remove=FALSE)
+ccZ %>%
+  ggplot(aes(x=BayYear, y=Estimate, fill=Bay)) +
+  geom_bar(stat="identity",alpha=1)+
+  geom_errorbar(aes(ymin=`95% LCI`, ymax=`95% UCI`),
+                  width=.2,position=position_dodge(.9), colour="lightgrey")+
+  scale_fill_manual(values=drabcolors)+
+  #scale_fill_grey()+
+  xlab("")+ylab("est. Z")+
+  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))
+#ggsave("mortalitybarplot_drab.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#dev.off()
+```
+
+**Add Lyndie's to the rest of the data for the ridges plots**
+```{r, include=FALSE}
+lylen<-read.csv("lyndie_lengths.csv", na.strings="", header=TRUE)
+allmelt <-read.csv("allmeltdec2019.csv", na.strings="", header=TRUE)
+
+#to make this work, there has to be a week column for 2010, 2011
+lylen <-dplyr::select(lylen, - Tow) 
+
+#catcorr function parameterized for shinnecock selectivity.  
+catchcorrect <- function(ogl) #where OG length (ogl) is the original fish length
+{
+  cc <-(1+(1-1/(1+exp(-0.092437901714982*(ogl-51.4909728843284))))) #I couldn't get this to work by supplying custom arguments for g and lh, so just do it this way. 
+  return(cc)
+}
+lylen <-mutate(lylen,catcorr=catchcorrect(lylen$TL), Year=as.factor(Year), Date=as.Date(Date)) %>% dplyr::rename(value=TL)
+
+allmelt <-mutate(allmelt, value=as.numeric(as.character(value)), Year=as.factor(Year), Date=as.Date(Date), catcorr=as.numeric(as.character(catcorr)))  
+allmelt <-bind_rows(allmelt,lylen)
+
+#create a corrected catch vector.
+allmelt <-mutate(allmelt, corTL= round(value*catcorr,0))
+
+```
+
+## Make gg_ridges plots for each year 2016##
+**2016**
+```{r, fig.align='center', echo=FALSE}
+### Make the viridis plot for all the bays. 
+library("ggridges")
+library("forcats")
+sunnycolors <-c("#ec4847","#6600ff", "#e6df44", "#061283", "#5bd0c8")
+drabcolors <-c("#d0d1e6","#a6bddb", "#67a9cf", "#1c9099", "#016450")
+
+allmelt %>%
+  filter(Year==2016, value <= 120, Week < 16)%>%
+  mutate(Week = fct_rev(as.factor(Week))) %>%
+  ggplot(aes(y=Week)) +
+  stat_density_ridges(aes(x=value,fill=paste(Bay),point_color=Bay, point_fill=Bay),
+                      alpha = 0.8, color="white", from=0, to=130,quantile_lines = TRUE, quantiles = c(0.025, 0.975),
+                      #jittered_points=TRUE, scale=.95, rel_min_height=.01,
+                      #position = "raincloud",
+                      #scale=0.7
+                      )+
+  scale_discrete_manual("point_color", values = drabcolors)+
+  labs(x = "length (mm)",
+       y = "Week",
+       #title = "YOY Winter Flounder by length",
+       subtitle = "2016",
+       caption = "") +
+  scale_y_discrete(expand = c(0.01, 0)) +
+  scale_x_continuous(expand = c(0.01, 0)) +
+  scale_fill_cyclical(breaks = c("Jamaica", "Mattituck","Moriches","Napeague", "Shinnecock"),
+                      labels = c(`Jamaica` = "Jamaica",`Mattituck`="Mattituck", `Moriches` = "Moriches", Napeague="Napeague", Shinnecock="Shinnecock"),
+                      values = c("#d0d1e6","#a6bddb", "#67a9cf", "#1c9099", "#016450"), #drabcolors
+                      name = "Bay", guide = "legend") +
+  theme_ridges(grid = FALSE)+
+  theme(
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "transparent",colour = NA),
+    plot.background = element_rect(fill = "transparent",colour = NA)
+  )
+
+#ggsave("allvir2016_drab.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#dev.off()
+```
+
+**2011**
+```{r, fig.align='center', echo=FALSE}
+### Make the viridis plot for all the bays. 
+library("ggridges")
+library("forcats")
+sunnycolors <-c("#ec4847","#e6df44", "#5bd0c8")
+drabcolors <-c("#a6bddb", "#67a9cf",  "#016450")
+
+allmelt %>%
+  filter(Year==2011, value <= 120)%>%
+  mutate(Week = fct_rev(as.factor(Week))) %>%
+  ggplot(aes(y=Week)) +
+  stat_density_ridges(aes(x=value,fill=paste(Bay),point_color=Bay, point_fill=Bay),
+                      alpha = 0.8, color="white", from=0, to=130,quantile_lines = TRUE, quantiles = c(0.025, 0.975),
+                      #jittered_points=TRUE, scale=.95, rel_min_height=.01,
+                      #position = "raincloud",
+                      #scale=0.7
+                      )+
+  scale_discrete_manual("point_color", values = drabcolors)+
+  labs(x = "length (mm)",
+       y = "Week",
+       #title = "YOY Winter Flounder by length",
+       subtitle = "2011",
+       caption = "") +
+  scale_y_discrete(expand = c(0.01, 0)) +
+  scale_x_continuous(expand = c(0.01, 0)) +
+  scale_fill_cyclical(breaks = c("Jamaica","Moriches", "Shinnecock"),
+                      labels = c(`Jamaica` = "Jamaica", `Moriches` = "Moriches", Shinnecock="Shinnecock"),
+                      values = c("#a6bddb", "#67a9cf",  "#016450"),
+                      name = "Bay", guide = "legend") +
+  theme_ridges(grid = FALSE)+
+  theme(
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "transparent",colour = NA),
+    plot.background = element_rect(fill = "transparent",colour = NA)
+  )
+
+#ggsave("allvir2020_11_drab.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#dev.off()
+```
+
+**2010**
+```{r, fig.align='center', echo=FALSE}
+### Make the viridis plot for all the bays. 
+library("ggridges")
+library("forcats")
+sunnycolors <-c("#006600","#ec4847","#e6df44", "#061283", "#5bd0c8")
+drabcolors <-c("#f6eff7","#d0d1e6", "#67a9cf", "#1c9099", "#016450")
+
+allmelt %>%
+  filter(Year==2010, value <= 120)%>%
+  mutate(Week = fct_rev(as.factor(Week))) %>%
+  ggplot(aes(y=Week)) +
+  stat_density_ridges(aes(x=value,fill=paste(Bay),point_color=Bay, point_fill=Bay),
+                      alpha = 0.8, color="white", from=0, to=130,quantile_lines = TRUE, quantiles = c(0.025, 0.975),
+                      #jittered_points=TRUE, scale=.95, rel_min_height=.01,
+                      #position = "raincloud",
+                      #scale=0.7
+                      )+
+  scale_discrete_manual("point_color", values = drabcolors)+
+  labs(x = "length (mm)",
+       y = "Week",
+       #title = "YOY Winter Flounder by length",
+       subtitle = "2010",
+       caption = "") +
+  scale_y_discrete(expand = c(0.01, 0)) +
+  scale_x_continuous(expand = c(0.01, 0)) +
+  scale_fill_cyclical(breaks = c("Cold Spring Pond","Jamaica","Moriches","Napeague", "Shinnecock"),
+                      labels = c(`Cold Spring Pond`="Cold Spring Pond",`Jamaica` = "Jamaica", `Moriches` = "Moriches", Napeague="Napeague", Shinnecock="Shinnecock"),
+                      values = c("#f6eff7","#d0d1e6", "#67a9cf", "#1c9099", "#016450"),
+                      name = "Bay", guide = "legend") +
+  theme_ridges(grid = FALSE)+
+  theme(
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "transparent",colour = NA),
+    plot.background = element_rect(fill = "transparent",colour = NA)
+  )
+
+#ggsave("allvir2020_10_drab.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#dev.off()
+```
+
+
+**GROWTH** **GROWTH** **GROWTH** **GROWTH** 
+
+## Growth, as average length ##
+I think it's best to actually report this as a table instead of as a series of plots
+Growth in each bay in each year, split by cohorts if that applies. 
+```{r, fig.align='center', echo=FALSE}
+
+allmelt <-separate(allmelt,Date, c("year","month","d"), remove=FALSE) %>%unite(col="Day",month,d, sep="-", remove=TRUE)%>% unite(BayYear, Bay, Year, remove=FALSE)
+
+####line to remove the outlier point from Jamaica####
+allmelt <-mutate(allmelt, value=ifelse(BayYear=="Jamaica_2010" & value==41,NA,value))
+
+sunnycolors <-c("#006600","#ec4847","#6600ff", "#e6df44", "#061283", "#5bd0c8")
+#facet plot for regular bays
+my.formula <- y ~ x
+allmelt %>%
+  filter(Bay %in% c("Jamaica","Moriches","Napeague","Cold Spring Pond", "Mattituck", "Shinnecock"))%>%
+  filter(Year %in% c("2010","2011","2015","2016","2017"))%>%
+ggplot(aes(y=value,x=Day,fill=Bay))+
+  #geom_point(aes(y=value,x=Day,fill=Bay,color=Bay,))+
+  scale_x_discrete(breaks=20)+
+  scale_color_manual(values=sunnycolors)+ scale_fill_manual(values=sunnycolors)+
+  geom_smooth(aes(group=Bay,y=value,x=Day,color=Bay,fill=Bay), method="lm", formula= my.formula, se=TRUE,  fullrange=FALSE)+
+  #stat_poly_eq(formula = my.formula, 
+          #  aes(group=Bay,y=value,x=Day,label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
+           # parse = TRUE) +     
+  ylab("length (mm")+
+  xlab("")+
+  #ylim()+
+  facet_grid(~Year)+
+  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))
+#ggsave("growthslopes3.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#dev.off()
+```
+
+
+
+#Growth ANOVAs by Bay * Year for the rest of the bays*
+```{r}
+#submelt <-allmelt %>%
+#  filter(Bay %in% c("Jamaica","Moriches","Napeague","Cold Spring Pond"))%>%
+#  filter(Year %in% c("2010","2011","2016"))
+
+allmelt <-mutate(allmelt, Date=as.Date(Date), Week =as.numeric(Week), numDate=as.numeric(as.POSIXct(Date)))
+
+#edays and week function
+eday <- function(df){
+  edays <-c()
+for (i in 2:length(df$Date)){
+  edays[i] <-df$Date[i]-df$Date[1]}
+edays[1] <-0
+df <-cbind(df,edays)
+}
+
+allmelt.naomit <-filter(allmelt, !is.na(Date), BayYear !="NA_2016")
+
+allmelt.naomit <-allmelt.naomit %>% base::split(.$BayYear)%>%
+ purrr::map_dfr(eday)
+
+#exactly the same whether you use date or eday... 
+yearsS <- lm(value~Date*Bay*Year, data=allmelt.naomit, type=3, na.action=na.omit)
+car::Anova(yearsS)
+#extract the parameter estimates and confidence intervals
+#yearsS.tab <- cbind(coef=coef(yearsS),confint(yearsS))
+#yearsS.tab 
+
+#Tukey Test
+df<-df.residual(yearsS)
+MSerror<-deviance(yearsS)/df
+comparison <- HSD.test(yearsS,c("Bay","Year"),MSerror=MSerror,alpha=0.05/105,  group=TRUE)
+comparison
+```
+
+Sufficient evidence to **give each bay and year it's own slope and intercept....** 
+```{r}
+options(contrasts = c("contr.treatment", "contr.poly"))
+allmelt <-unite(allmelt,BayYear,Bay,year, remove=FALSE)
+
+yearsS <- lm(value~numDate*BayYear, data=allmelt, type=3, na.action=na.omit)
+car::Anova(yearsS)
+#extract the parameter estimates and confidence intervals
+#
+yearsS.tab <- cbind(coef=coef(yearsS),confint(yearsS))
+yearsS.tab 
+
+
+#Tukey Test
+df<-df.residual(yearsS)
+MSerror<-deviance(yearsS)/df
+comparison <- HSD.test(yearsS,c("BayYear"),MSerror=MSerror, alpha=0.05/105,  group=TRUE)
+comparison
+
+```
+
+**lsmeans pairwise comparisons**
+```{r}
+by <-lm(value~edays*BayYear, data=allmelt.naomit, type=3, na.action=na.omit)
+anova(by)
+#coefficients
+by$coefficients
+#trends
+by.list <-lstrends(by,"BayYear", var="edays")
+#compare slopes
+bonf.alpha <-0.05/105
+bonf.alpha
+p <- as.data.frame(pairs(by.list)) %>% mutate(sigp = ifelse(p.value <= bonf.alpha,"sig","not sig"))
+p
+```
+
+```{r}
+typing.lsm = lsmeans(by, pairwise ~ BayYear, glhargs=list())
+plot(typing.lsm[[2]])
+```
+
+**If you want to see within bay between years and within year between bays comparisons, see CatchCurvesApril2020_VER2.Rmd**
+
+**output regression curves**
+Try maybe not using num date, we need to create an edays function for this. 
+```{r}
+#using numDate gives an improbably small growth values.
+#DATE seems to work, but i hope the program recognizes what it is. 
+#lets also try edays
+#date and edays give the same result, so that's good. 
+
+
+library("purrr")
+models <-allmelt.naomit %>% base::split(.$BayYear)%>%
+ purrr::map(function(df) lm(value~Date,data = df))
+
+f <-models %>% map(summary) %>% map_dbl(~.$coefficients[2]) #slope
+g <-models %>% map(summary) %>% map_dbl(~.$coefficients[4]) #std error of the slope
+h <-models %>% map(summary) %>% map_dbl(~.$coefficients[6]) #t value of the slope
+i <-models %>% map(summary) %>% map_dbl(~.$coefficients[8]) #p value of the slope
+j <-models %>% map(confint) %>% map_dbl(~.[2]) #LCI of slope
+k <-models %>% map(confint) %>% map_dbl(~.[4]) #UCI of slope
+a <-models %>% map(summary) %>% map_dbl(~.$adj.r.squared) #r squared
+b <-models %>% map(summary) %>% map_dbl(~.$coefficients[1])#y intercept
+c <-models %>% map(summary) %>% map_dbl(~.$fstatistic[1]) #f statistic
+d <-models %>% map(summary) %>% map_dbl(~.$df[2])
+e <-models %>% map_dbl(lmp) #p value
+
+est_list <-list(f,g,h,i,j,k,a,b,c,d,e)
+ests <-do.call("rbind",est_list)
+rownames(ests) <-c("slope","std.err.slope","t.value.slope","p.val.slope","LCI.slope","UCI.slope","adj.r.sq","y.int","f.stat","dof","p.val")
+ests <- as.data.frame(t(ests))
+ests<-as.data.frame(tibble::rownames_to_column(ests, var ="BayYear"))
+```
+
+
+**Plot growth estimates as bar graph: BayYear**
+```{r}
+gests <-separate(ests, "BayYear", c("Bay", "Year"), sep="_",remove=FALSE)
+
+sunnycolors <-c("#006600","#ec4847","#6600ff", "#e6df44", "#061283", "#5bd0c8")
+drabcolors <-c("#f6eff7","#d0d1e6","#a6bddb", "#67a9cf", "#1c9099", "#016450")
+
+gests %>%
+ ggplot(aes(x=BayYear, y=slope, fill=Bay)) +
+  #ggplot(aes(x=BayYear, y=slope)) +
+  geom_bar(stat="identity",alpha=1)+
+  geom_errorbar(aes(ymin=LCI.slope, ymax=UCI.slope),
+                  width=.2,position=position_dodge(.9), colour="lightgrey")+
+  scale_fill_manual(values=drabcolors)+
+  #scale_fill_grey()+
+  xlab("")+ylab("est. G")+
+  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))
+#ggsave("growthbarplot_drab.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#dev.off()
+```
+
