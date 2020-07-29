@@ -1,7 +1,7 @@
 ---
 title: "Field survey JULY 2020 GITHUB VERSION"
 author: "tara"
-date: "6/12/2020"
+date: "7/28/2020"
 output:
   html_document: 
     highlight: tango
@@ -41,9 +41,9 @@ This is the Field Survey Data half of the Bayesgamsattemps3.Rmd. I've decided to
 - 
 
 
-**In this version we have used corrected catch +1 to calculate mortality slopes, and have gotten rid of the chapman-robson curves**
+**In this version we have used corrected catch +1 to calculate mortality slopes**
 *The one fish was not added at the tow level, but at the WEEK level*
-the chapman robson curves can be found in the bayesgamsattempt2.Rmd script. 
+the chapman robson curves can also be found in the bayesgamsattempt2.Rmd script. 
 
 This builds off the data wrangling done in the Rscript 'bayesgamsattempt.R' and baysgams_prep.RMD'
 
@@ -67,13 +67,8 @@ library("purrr")
 
 Load the data & some extra data minging. 
 ```{r, include=FALSE}
-
-#somedata<-read.csv("skcompiled4gams2.csv", na.strings="", header=TRUE)
 somedata3<-read.csv("somedata3_Mar-4-2020.csv", na.strings="", header=TRUE)
-#drop some columns that we aren't using for now. 
-#somedata <- dplyr::select(somedata, -avl, -minl,-maxl, -sdl) #not trying to predict length yet, and there are a LOT of NA. 
 somedata4 <-dplyr::select(somedata3,-rcpT,-std_cpue,-cpue)
-
 ```
 
 Mattituck Data minging & binding to other data
@@ -92,8 +87,6 @@ byweek <-dplyr::select(byweek, -Week) %>% mutate(cpue=catch1/area, cpue.nc =corr
 
 #create day- year since common start date because it's not plotting them lined up. 
 byweek <-separate(byweek, Date, c("year","m","d"), remove=FALSE) %>%unite(col="Day",m,d, sep="-") 
-
-
 ```
 
 Total effort and capture table
@@ -223,7 +216,7 @@ seven + scale_colour_manual(name = "Bay",values = sunnycolors)+
   ylim(-10,0)+ylab("LN CPUE")+
 ggtitle("2017")+
 theme_classic()
-#ggsave("mortality2017a.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#ggsave("mortality2017a.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 
 #2016
@@ -240,7 +233,7 @@ six + scale_colour_manual(name = "Bay",values = sunnycolors)+
    ylim(-10,0)+ylab("LN CPUE")+
 ggtitle("2016")+
 theme_classic()
-#ggsave("mortality2016a.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#ggsave("mortality2016a.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
   
 #2015
@@ -253,7 +246,7 @@ seven + scale_colour_manual(name = "Bay",values = sunnycolors)+
    ylim(-10,0)+ylab("LN CPUE")+
 ggtitle("2015")+
 theme_classic()
-#ggsave("mortality2015a.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#ggsave("mortality2015a.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()  
 
 #2011
@@ -268,7 +261,7 @@ ele + scale_colour_manual(name = "Bay",values = sunnycolors)+
    ylim(-10,0)+ylab("LN CPUE")+
 ggtitle("2011")+
 theme_classic()
-#ggsave("mortality2011a.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#ggsave("mortality2011a.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 
 #2010
@@ -285,7 +278,7 @@ te + scale_colour_manual(name = "Bay",values = sunnycolors)+
   ylim(-10,0)+ylab("LN CPUE")+
 ggtitle("2010")+
 theme_classic()
-#ggsave("mortality2010a.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#ggsave("mortality2010a.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 
 par(mfrow=c(2,4))
@@ -640,7 +633,7 @@ allmelt %>%
     plot.background = element_rect(fill = "transparent",colour = NA)
   )
 
-#ggsave("allvir2016_drab.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#ggsave("allvir2016_drab.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 ```
 
@@ -682,7 +675,7 @@ allmelt %>%
     plot.background = element_rect(fill = "transparent",colour = NA)
   )
 
-#ggsave("allvir2020_11_drab.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#ggsave("allvir2020_11_drab.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 ```
 
@@ -724,7 +717,7 @@ allmelt %>%
     plot.background = element_rect(fill = "transparent",colour = NA)
   )
 
-#ggsave("allvir2020_10_drab.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#ggsave("allvir2020_10_drab.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 ```
 
@@ -760,7 +753,7 @@ ggplot(aes(y=value,x=Day,fill=Bay))+
   #ylim()+
   facet_grid(~Year)+
   theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))
-#ggsave("growthslopes3.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#ggsave("growthslopes3.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 ```
 
@@ -895,7 +888,7 @@ gests %>%
   #scale_fill_grey()+
   xlab("")+ylab("est. G")+
   theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))
-#ggsave("growthbarplot_drab.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#ggsave("growthbarplot_drab.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 ```
 
