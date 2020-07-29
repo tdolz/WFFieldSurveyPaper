@@ -1,0 +1,1290 @@
+---
+title: "cohortcdfs GITHUB VERSION"
+author: "tara"
+date: "7/16/2020"
+output:
+  pdf_document: default
+  html_document: default
+theme: readable
+---
+
+```{r setup, echo=FALSE, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, cache=TRUE)
+```
+
+## R Markdown
+
+This script takes elements from "taraCDFSBAYYEAR.Rmd" and "taraCDFS2.Rmd" 
+
+
+**objectives**
++ calculate multiple peaks for shinnecock and mattituck cohorts wrt environmental variables. 
+
+could randomize cdfs between years and bays to see if they overlap between years for example. for the settlement example.- Not sure what this means. 
+
+**Analyses**  
+
+
+**Total sampled area**
+I did some rough area calculations in google earth based on previous sample maps. 
+Sample maps can be found in the powerpoint "Sampling maps w stations for first SK grant 2016"
+Shinnecock: 1.61 KM
+Moriches: 1.49 KM
+Jamaica Bay: 2.24 KM
+Napeague Harbor: 1.98 KM
+Cold Spring Pond: 0.52 KM
+
+
+```{r, echo=FALSE, warning=FALSE}
+setwd("/Users//tdolan/Documents//R-Github//WFFieldSurveyPaper")
+
+library("tidyr")
+library("ggplot2")
+library("plyr")
+library("purrr")
+library("dplyr")
+```
+
+**My Data**
+```{r}
+#somedata3<-read.csv("somedata3_Mar-4-2020.csv", na.strings="", header=TRUE) %>% filter(!is.na(Temp))
+somedata3 <-read.csv("skcompiled4gams2.csv", na.strings="", header=TRUE) 
+```
+
+##**Calculate CDFS for available vs. occupied habitat**##  
+Separately for each bay, but with data grouped across years.   
+
+Split data by bays : **Change this chunk each time** other chunks remain the same. 
+```{r, include=TRUE, echo=TRUE}
+SomeData <-somedata3 %>% dplyr::select(-minl, -maxl, -sdl, -distswept, -Tow, -Towindex) %>% mutate(Pres =ifelse(cpT > 0,1,0))%>%
+  unite(BayYear,Bay,Year, remove=FALSE)%>% base::split(.$Bay)
+Bay <-SomeData$`Shinnecock` # Just change out the bay you are looking at. 
+
+total.area <- 1.61*1000 #for Shinnecock
+       #   <- 1.49*1000 #for Moriches
+       #   <- 2.24*1000 #for Jamaica
+       #   <- 1.98*1000 #for Napeague
+       #   <- 0.52*1000 #for Cold Spring Pond
+```
+
+
+### **Cohort CDFS** ###
+starred weeks only. 
+```{r}
+SomeData1617 <-somedata3 %>% dplyr::select(-minl, -maxl, -sdl, -distswept, -Towindex, -cpue, -efoff, -Bottom.type, -NumKept) %>% mutate(Pres =ifelse(cpT > 0,1,0))%>%
+  unite(BayYear,Bay,Year, remove=FALSE) %>% filter(Bay =="Shinnecock")%>% filter(Year %in% c("2016","2017"))
+
+allsco <-read.csv("allscoJune30.csv", na.strings="", header=TRUE) 
+
+allsco <-left_join(allsco, SomeData1617, by=c("Bay","Date","Year")) %>% dplyr::select(-X.y, -NumCaught, -rcpT, -X.x, -X.1, -avl)
+
+splitco <-allsco%>%
+  split(list(.$Year,.$co)) 
+
+shi16_e <-plyr::ddply(splitco$`2016.1`, Week~Date~Station, summarize, coCatch =sum(value),Date=max(Date), Temp=max(Temp), SAL=max(SAL), DO=max(DO.mg.L), Depth=max(AvDepth)) %>%mutate(Week=as.numeric(as.character(Week)), co="1") %>% 
+  mutate(starred=ifelse(Week %in% c(5,6,7,8,9),"star","nostar"),Date=as.Date(Date)) 
+
+shi16_l <-plyr::ddply(splitco$`2016.2`, Week~Date~Station, summarize, coCatch =sum(value),Date=max(Date),Temp=max(Temp), SAL=max(SAL), DO=max(DO.mg.L), Depth=max(AvDepth)) %>%mutate(Week=as.numeric(as.character(Week)), co="2")%>% 
+mutate(starred=ifelse(Week %in% c(5,6,7,8,9),"star","nostar"),Date=as.Date(Date))
+
+shi17_e <-plyr::ddply(splitco$`2017.1`,  Week~Date~Station, summarize, coCatch =sum(value),Date=max(Date),Temp=max(Temp), SAL=max(SAL), DO=max(DO.mg.L), Depth=max(AvDepth)) %>%mutate(Week=as.numeric(as.character(Week)), co="1")%>% 
+mutate(starred=ifelse(Week %in% c(1,2,3,4,5,6),"star","nostar"),Date=as.Date(Date))
+
+shi17_l <-plyr::ddply(splitco$`2017.2`,Week~Date~Station, summarize, coCatch =sum(value),Date=max(Date),Temp=max(Temp), SAL=max(SAL), DO=max(DO.mg.L), Depth=max(AvDepth)) %>%mutate(Week=as.numeric(as.character(Week)), co="2")%>%
+  mutate(starred=ifelse(Week %in% c(1,2,3,4,5,6),"star","nostar"),Date=as.Date(Date))
+
+shin16co <-bind_rows(shi16_e, shi16_l) %>%filter(starred=="star") %>% mutate(Pres=ifelse(coCatch > 0,1,0))
+shin17co <-bind_rows(shi17_e, shi17_l) %>%filter(starred=="star")%>% mutate(Pres=ifelse(coCatch >0,1,0))
+
+```
+
+***Compare cohorts, make separate CDFS for each**
+Shinnecock 2016
+```{r}
+co16_1Temp <- filter(shi16_e, !is.na(Temp) & starred=="star") %>% arrange(Temp)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+co16_2Temp <- filter(shi16_l, !is.na(Temp) & starred=="star") %>% arrange(Temp)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+
+#AVAILABLE HABITAT: should be for both cohorts!!!
+shin16coTemp <-filter(shin16co, !is.na(Temp) & starred=="star")%>% arrange(Temp)
+SurveyCDF = cumsum(shin16coTemp$Temp)
+SUMTemp<-sum(shin16coTemp$Temp)
+shin16coTemp <- mutate(shin16coTemp, SurveyCDFFinal=SurveyCDF/SUMTemp)  #this is the AVAILABLE HABITAT over ALL YEARS in Shinnecock
+
+#OCCUPIED HABITAT: cohort 1
+Temp <- co16_1Temp$Temp
+yh=sum(co16_1Temp$coCatch)
+ybar_strata=mean(co16_1Temp$coCatch) 
+#create and plot CDF for occupied habitat
+co16_1Temp <-mutate(co16_1Temp, OccupiedTemp =(coCatch/ybar_strata)*as.numeric(Pres)*Temp)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedTemp))
+SUMOccTemp <-sum(co16_1Temp$OccupiedTemp)
+co16_1Temp <-mutate(co16_1Temp, OccCDF_final = OccupiedCDF/SUMOccTemp)
+
+#OCCUPIED HABITAT: cohort 2
+Temp <- co16_2Temp$Temp
+yh=sum(co16_2Temp$coCatch)
+ybar_strata=mean(co16_2Temp$coCatch) 
+#create and plot CDF for occupied habitat
+co16_2Temp <-mutate(co16_2Temp, OccupiedTemp =(coCatch/ybar_strata)*as.numeric(Pres)*Temp)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedTemp))
+SUMOccTemp <-sum(co16_2Temp$OccupiedTemp)
+co16_2Temp <-mutate(co16_2Temp, OccCDF_final = OccupiedCDF/SUMOccTemp)
+
+#plot occupied, available, both cohorts
+a <-  ggplot(shin16coTemp, aes(x=Temp, y=SurveyCDFFinal))
+a+geom_line(linetype="dotted")+
+  geom_line(aes(x=Temp, y=OccCDF_final), color="#a6bddb", data=co16_1Temp)+
+  geom_line(aes(x=Temp, y=OccCDF_final), color="#1c9099", data=co16_2Temp)+
+  ylab("CDF")+xlab("Temperature (C)")+ggtitle("Shinnecock 2016")+
+  theme_classic()
+#ggsave("cohortcdfs16_OccvAVTemp.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+```
+
+**Bootstrap test for significant differences between cohorts: Shinnecock 2016**
+```{r}
+
+#TEST STATISTIC: DISTANCE BETWEEN COHORTS
+Dist_test<-abs(co16_1Temp$OccCDF_final-co16_2Temp$OccCDF_final)
+Test.statistic<-max(Dist_test)
+Test.statistic
+
+#BOOTSTRAPPING TEST STATISTIC AND CONFIDENCE INTERVALS
+###Bootstrapping occupied CPUE to create new CDFS
+DistBoot<-abs(co16_1Temp$OccCDF_final-co16_2Temp$OccCDF_final)#if not defined prior to running loop,
+TS.Boot<-max(DistBoot)  
+#defining variables
+catch1 <-co16_1Temp$coCatch #total catch in that TOW
+catch2 <-co16_2Temp$coCatch #total catch in that TOW
+ybar1 <-mean(catch1)
+ybar2 <-mean(catch2)
+Pres1 <-co16_1Temp$Pres #Presence absence for that TOW
+Pres2 <-co16_2Temp$Pres
+Temp1 <-co16_1Temp$Temp
+Temp2 <-co16_2Temp$Temp
+
+# THE BOOT LOOP
+set.seed(1234)
+results<-c()
+boot.store1 <-vector("list",length(10000))
+boot.store2 <-vector("list",length(10000))
+for(i in 1:10000) {  
+  #Cohort 1
+  BootSampler1<-sample(catch1, length(catch1),replace=FALSE)  #catch cohort 1
+  TempBoot1<-(BootSampler1/ybar1)*(as.numeric(Pres1))*Temp1 
+  CDFBoot1<-cumsum(TempBoot1)
+  SUMBoot1<-sum(TempBoot1)
+  CDFFinalBoot1<-CDFBoot1/SUMBoot1
+  boot.store1[[i]]<-CDFFinalBoot1
+  #Cohort 2
+  BootSampler2<-sample(catch2, length(catch2),replace=FALSE)  #catch cohort 1
+  TempBoot2<-(BootSampler2/ybar2)*(as.numeric(Pres2))*Temp2 
+  CDFBoot2<-cumsum(TempBoot2)
+  SUMBoot2<-sum(TempBoot2)
+  CDFFinalBoot2<-CDFBoot2/SUMBoot2
+  boot.store2[[i]]<-CDFFinalBoot2
+  #Test statistic
+  DistBoot<-abs(CDFFinalBoot1-CDFFinalBoot2) #absolute value from bootstrapped and observed
+  results[i]<-max(DistBoot) #store them here
+  }
+summary(results)
+
+#SIGNIFICANCE TEST RESULT
+sum(abs(results>abs(Test.statistic))/10000) ## See how many of the values in 'result'are more extreme than the observed value
+
+#EXTRACT BOOTS FOR CI
+#Cohort1
+b.store1 <- transpose(boot.store1)  
+lcis1 <-c()
+ucis1 <-c()
+meanboot1<-c()
+for(i in 1:length(b.store1)) { 
+  bvec1 <-unlist(b.store1[i])
+  lcis1[i]<-quantile(bvec1,0.025)
+  ucis1[i]<-quantile(bvec1,0.975)
+  meanboot1[i]<-mean(bvec1)
+}
+b.store2 <- transpose(boot.store2)  
+lcis2 <-c()
+ucis2 <-c()
+meanboot2<-c()
+for(i in 1:length(b.store2)) { 
+  bvec2 <-unlist(b.store2[i])
+  lcis2[i]<-quantile(bvec2,0.025)
+  ucis2[i]<-quantile(bvec2,0.975)
+  meanboot2[i]<-mean(bvec2)
+}
+
+#plot occupied, available, both cohorts
+a <-  ggplot()
+ a+geom_line(aes(x=Temp, y=OccCDF_final), color="#a6bddb", data=co16_1Temp)+
+   geom_line(aes(x=Temp, y=SurveyCDFFinal),linetype="dotted", data=shin16coTemp)+
+  #geom_line(aes(x=Temp,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
+  geom_ribbon(aes(x=Temp,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
+  geom_line(aes(x=Temp, y=OccCDF_final), color="#1c9099", data=co16_2Temp)+
+  geom_ribbon(aes(x=Temp,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  #geom_line(aes(x=Temp,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
+  ylab("CDF")+xlab("Temperature (C)")+ggtitle("Shinnecock 2016")+
+  theme_classic()
+#ggsave("cohortcdfs16_OccvAVTempCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+#save for later
+
+```
+
+
+Shinnecock 2017
+```{r}
+co17_1Temp <- filter(shi17_e, !is.na(Temp) & starred=="star") %>% arrange(Temp)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+co17_2Temp <- filter(shi17_l, !is.na(Temp) & starred=="star") %>% arrange(Temp)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+
+#AVAILABLE HABITAT: should be for both cohorts!!!
+shin17coTemp <-filter(shin17co, !is.na(Temp)& starred=="star")%>% arrange(Temp)
+SurveyCDF = cumsum(shin17coTemp$Temp)
+SUMTemp<-sum(shin17coTemp$Temp)
+shin17coTemp <- mutate(shin17coTemp, SurveyCDFFinal=SurveyCDF/SUMTemp)  #this is the AVAILABLE HABITAT over ALL YEARS in Shinnecock
+
+#OCCUPIED HABITAT: cohort 1
+Temp <- co17_1Temp$Temp
+yh=sum(co17_1Temp$coCatch)
+ybar_strata=mean(co17_1Temp$coCatch) 
+#create and plot CDF for occupied habitat
+co17_1Temp <-mutate(co17_1Temp, OccupiedTemp =(coCatch/ybar_strata)*as.numeric(Pres)*Temp)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedTemp))
+SUMOccTemp <-sum(co17_1Temp$OccupiedTemp)
+co17_1Temp <-mutate(co17_1Temp, OccCDF_final = OccupiedCDF/SUMOccTemp)
+
+#OCCUPIED HABITAT: cohort 2
+Temp <- co17_2Temp$Temp
+yh=sum(co17_2Temp$coCatch)
+ybar_strata=mean(co17_2Temp$coCatch) 
+#create and plot CDF for occupied habitat
+co17_2Temp <-mutate(co17_2Temp, OccupiedTemp =(coCatch/ybar_strata)*as.numeric(Pres)*Temp)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedTemp))
+SUMOccTemp <-sum(co17_2Temp$OccupiedTemp)
+co17_2Temp <-mutate(co17_2Temp, OccCDF_final = OccupiedCDF/SUMOccTemp)
+
+#plot occupied, available, both cohorts
+a <-  ggplot(shin17coTemp, aes(x=Temp, y=SurveyCDFFinal))
+a+geom_line(linetype="dotted")+
+  geom_line(aes(x=Temp, y=OccCDF_final), color="#a6bddb", data=co17_1Temp)+
+  geom_line(aes(x=Temp, y=OccCDF_final), color="#1c9099", data=co17_2Temp)+
+  ylab("CDF")+xlab("Temperature (C)")+ggtitle("Shinnecock 2017")+
+  theme_classic()
+#ggsave("cohortcdfs17_OccvAVTemp.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+```
+
+**Bootstrap test for significant differences between cohorts: Shinnecock 2017**
+```{r}
+
+#TEST STATISTIC: DISTANCE BETWEEN COHORTS
+Dist_test<-abs(co17_1Temp$OccCDF_final-co17_2Temp$OccCDF_final)
+Test.statistic<-max(Dist_test)
+Test.statistic
+
+#BOOTSTRAPPING TEST STATISTIC AND CONFIDENCE INTERVALS
+###Bootstrapping occupied CPUE to create new CDFS
+DistBoot<-abs(co17_1Temp$OccCDF_final-co17_2Temp$OccCDF_final)#if not defined prior to running loop,
+TS.Boot<-max(DistBoot)  
+#defining variables
+catch1 <-co17_1Temp$coCatch #total catch in that TOW
+catch2 <-co17_2Temp$coCatch #total catch in that TOW
+ybar1 <-mean(catch1)
+ybar2 <-mean(catch2)
+Pres1 <-co17_1Temp$Pres #Presence absence for that TOW
+Pres2 <-co17_2Temp$Pres
+Temp1 <-co17_1Temp$Temp
+Temp2 <-co17_2Temp$Temp
+
+# THE BOOT LOOP
+set.seed(1234)
+results<-c()
+boot.store1 <-vector("list",length(10000))
+boot.store2 <-vector("list",length(10000))
+for(i in 1:10000) {  
+  #Cohort 1
+  BootSampler1<-sample(catch1, length(catch1),replace=FALSE)  #catch cohort 1
+  TempBoot1<-(BootSampler1/ybar1)*(as.numeric(Pres1))*Temp1 
+  CDFBoot1<-cumsum(TempBoot1)
+  SUMBoot1<-sum(TempBoot1)
+  CDFFinalBoot1<-CDFBoot1/SUMBoot1
+  boot.store1[[i]]<-CDFFinalBoot1
+  #Cohort 2
+  BootSampler2<-sample(catch2, length(catch2),replace=FALSE)  #catch cohort 1
+  TempBoot2<-(BootSampler2/ybar2)*(as.numeric(Pres2))*Temp2 
+  CDFBoot2<-cumsum(TempBoot2)
+  SUMBoot2<-sum(TempBoot2)
+  CDFFinalBoot2<-CDFBoot2/SUMBoot2
+  boot.store2[[i]]<-CDFFinalBoot2
+  #Test statistic
+  DistBoot<-abs(CDFFinalBoot1-CDFFinalBoot2) #absolute value from bootstrapped and observed
+  results[i]<-max(DistBoot) #store them here
+  }
+summary(results)
+
+#SIGNIFICANCE TEST RESULT
+sum(abs(results>abs(Test.statistic))/10000) ## See how many of the values in 'result'are more extreme than the observed value
+
+#EXTRACT BOOTS FOR CI
+#Cohort1
+b.store1 <- transpose(boot.store1)  
+lcis1 <-c()
+ucis1 <-c()
+meanboot1<-c()
+for(i in 1:length(b.store1)) { 
+  bvec1 <-unlist(b.store1[i])
+  lcis1[i]<-quantile(bvec1,0.025)
+  ucis1[i]<-quantile(bvec1,0.975)
+  meanboot1[i]<-mean(bvec1)
+}
+b.store2 <- transpose(boot.store2)  
+lcis2 <-c()
+ucis2 <-c()
+meanboot2<-c()
+for(i in 1:length(b.store2)) { 
+  bvec2 <-unlist(b.store2[i])
+  lcis2[i]<-quantile(bvec2,0.025)
+  ucis2[i]<-quantile(bvec2,0.975)
+  meanboot2[i]<-mean(bvec2)
+}
+
+#plot occupied, available, both cohorts
+a <-  ggplot()
+ a+geom_line(aes(x=Temp, y=OccCDF_final), color="#a6bddb", data=co17_1Temp)+
+    geom_line(aes(x=Temp, y=SurveyCDFFinal),linetype="dotted", data=shin17coTemp)+
+  #geom_line(aes(x=Temp,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
+  geom_ribbon(aes(x=Temp,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
+  geom_line(aes(x=Temp, y=OccCDF_final), color="#1c9099", data=co17_2Temp)+
+  geom_ribbon(aes(x=Temp,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  #geom_line(aes(x=Temp,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
+  ylab("CDF")+xlab("Temperature (C)")+ggtitle("Shinnecock 2017")+
+  theme_classic()
+#ggsave("cohortcdfs17_OccvAVTempCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+```
+
+**Percentiles**
+```{r, warning=FALSE, echo=TRUE}
+#Calculating Quantiles
+
+#FUNCTION TO EXTRACT PERCENTILES OF OCCUPIED HABITAT
+percentile.func <-function(df){
+df <- mutate(df, BTcolumn=round(Temp,digits=1),OccCDFcolumn=round(OccCDF_final,digits=2)) 
+  
+OccPer.5 <-(df[df$OccCDFcolumn=='0.05','BTcolumn']) #not interpolated version 
+OccPer.50 <-(df[df$OccCDFcolumn=='0.5','BTcolumn'])
+OccPer.95 <-(df[df$OccCDFcolumn=='0.95','BTcolumn'])
+not.interpolated <-list(OccPer.5,OccPer.50,OccPer.95)
+  #occ.ni <- rapply(not.interpolated, mean)
+#interpolated version 
+TabSurveyApprox<-approx(df$BTcolumn,df$OccCDFcolumn, n=20000)  
+TabSurveyApproxBT<-round(TabSurveyApprox$x,digits=3)        
+TabSurveyApproxSurveyOccCDF<-round(TabSurveyApprox$y,digits=3)   
+OccTabSurveyAp<-data.frame(cbind(TabSurveyApproxBT,TabSurveyApproxSurveyOccCDF))   
+OccPer.5.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.05','TabSurveyApproxBT'])  #(INTERPOLATED)
+OccPer.50.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.5','TabSurveyApproxBT'])
+OccPer.95.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.95','TabSurveyApproxBT'])
+interpolated <-list(OccPer.5.ap,OccPer.50.ap,OccPer.95.ap)
+occ.i <-rapply(interpolated, mean)
+#out <-list(not.interpolated, occ.i)
+occ.i
+}
+```
+
+**Apply percentile function**
+```{r}
+allcotemp <-bind_rows(co16_1Temp,co16_2Temp,co17_1Temp,co17_2Temp) 
+allcotemp <-separate(allcotemp, Date,c("Year","m","d"), sep="-", remove=FALSE)
+split.percent <-allcotemp %>% split(list(.$Year,.$co))%>% map_dfr(percentile.func) #map it
+
+split.percent
+```
+
+**DISSOLVED OXYGEN COHORTS**
+
+Shinnecock 2016
+```{r}
+
+co16_1DO <- filter(shi16_e, !is.na(DO) & DO > 0 & DO < 20 & starred=="star") %>% arrange(DO)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+co16_2DO <- filter(shi16_l, !is.na(DO) & DO > 0 & DO < 20 & starred=="star") %>% arrange(DO)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+
+#AVAILABLE HABITAT: should be for both cohorts!!!
+shin16coDO <-filter(shin16co, !is.na(DO)& DO > 0 & DO < 20 & starred=="star")%>% arrange(DO)
+SurveyCDF = cumsum(shin16coDO$DO)
+SUMDO<-sum(shin16coDO$DO)
+shin16coDO <- mutate(shin16coDO, SurveyCDFFinal=SurveyCDF/SUMDO)  #this is the AVAILABLE HABITAT over ALL YEARS in Shinnecock
+
+#OCCUPIED HABITAT: cohort 1
+DO <- co16_1DO$DO
+yh=sum(co16_1DO$coCatch)
+ybar_strata=mean(co16_1DO$coCatch) 
+#create and plot CDF for occupied habitat
+co16_1DO <-mutate(co16_1DO, OccupiedDO =(coCatch/ybar_strata)*as.numeric(Pres)*DO)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedDO))
+SUMOccDO <-sum(co16_1DO$OccupiedDO)
+co16_1DO <-mutate(co16_1DO, OccCDF_final = OccupiedCDF/SUMOccDO)
+
+#OCCUPIED HABITAT: cohort 2
+DO <- co16_2DO$DO
+yh=sum(co16_2DO$coCatch)
+ybar_strata=mean(co16_2DO$coCatch) 
+#create and plot CDF for occupied habitat
+co16_2DO <-mutate(co16_2DO, OccupiedDO =(coCatch/ybar_strata)*as.numeric(Pres)*DO)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedDO))
+SUMOccDO <-sum(co16_2DO$OccupiedDO)
+co16_2DO <-mutate(co16_2DO, OccCDF_final = OccupiedCDF/SUMOccDO)
+
+#plot occupied, available, both cohorts
+a <-  ggplot(shin16coDO, aes(x=DO, y=SurveyCDFFinal))
+a+geom_line(linetype="dotted")+
+  geom_line(aes(x=DO, y=OccCDF_final), color="#a6bddb", data=co16_1DO)+
+  geom_line(aes(x=DO, y=OccCDF_final), color="#1c9099", data=co16_2DO)+
+  ylab("CDF")+xlab("Dissolved Oxygen (mg/L)")+ggtitle("Shinnecock 2016")+
+  theme_classic()
+#ggsave("cohortcdfs16_OccvAVDO.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+```
+
+**Bootstrap test for significant differences between cohorts: Shinnecock 2016**
+```{r}
+
+#TEST STATISTIC: DISTANCE BETWEEN COHORTS
+Dist_test<-abs(co16_1DO$OccCDF_final-co16_2DO$OccCDF_final)
+Test.statistic<-max(Dist_test)
+Test.statistic
+
+#BOOTSTRAPPING TEST STATISTIC AND CONFIDENCE INTERVALS
+###Bootstrapping occupied CPUE to create new CDFS
+DistBoot<-abs(co16_1DO$OccCDF_final-co16_2DO$OccCDF_final)#if not defined prior to running loop,
+TS.Boot<-max(DistBoot)  
+#defining variables
+catch1 <-co16_1DO$coCatch #total catch in that TOW
+catch2 <-co16_2DO$coCatch #total catch in that TOW
+ybar1 <-mean(catch1)
+ybar2 <-mean(catch2)
+Pres1 <-co16_1DO$Pres #Presence absence for that TOW
+Pres2 <-co16_2DO$Pres
+DO1 <-co16_1DO$DO
+DO2 <-co16_2DO$DO
+
+# THE BOOT LOOP
+set.seed(1234)
+results<-c()
+boot.store1 <-vector("list",length(10000))
+boot.store2 <-vector("list",length(10000))
+for(i in 1:10000) {  
+  #Cohort 1
+  BootSampler1<-sample(catch1, length(catch1),replace=FALSE)  #catch cohort 1
+  DOBoot1<-(BootSampler1/ybar1)*(as.numeric(Pres1))*DO1 
+  CDFBoot1<-cumsum(DOBoot1)
+  SUMBoot1<-sum(DOBoot1)
+  CDFFinalBoot1<-CDFBoot1/SUMBoot1
+  boot.store1[[i]]<-CDFFinalBoot1
+  #Cohort 2
+  BootSampler2<-sample(catch2, length(catch2),replace=FALSE)  #catch cohort 1
+  DOBoot2<-(BootSampler2/ybar2)*(as.numeric(Pres2))*DO2 
+  CDFBoot2<-cumsum(DOBoot2)
+  SUMBoot2<-sum(DOBoot2)
+  CDFFinalBoot2<-CDFBoot2/SUMBoot2
+  boot.store2[[i]]<-CDFFinalBoot2
+  #Test statistic
+  DistBoot<-abs(CDFFinalBoot1-CDFFinalBoot2) #absolute value from bootstrapped and observed
+  results[i]<-max(DistBoot) #store them here
+  }
+summary(results)
+
+#SIGNIFICANCE TEST RESULT
+sum(abs(results>abs(Test.statistic))/10000) ## See how many of the values in 'result'are more extreme than the observed value
+
+#EXTRACT BOOTS FOR CI
+#Cohort1
+b.store1 <- transpose(boot.store1)  
+lcis1 <-c()
+ucis1 <-c()
+meanboot1<-c()
+for(i in 1:length(b.store1)) { 
+  bvec1 <-unlist(b.store1[i])
+  lcis1[i]<-quantile(bvec1,0.025)
+  ucis1[i]<-quantile(bvec1,0.975)
+  meanboot1[i]<-mean(bvec1)
+}
+b.store2 <- transpose(boot.store2)  
+lcis2 <-c()
+ucis2 <-c()
+meanboot2<-c()
+for(i in 1:length(b.store2)) { 
+  bvec2 <-unlist(b.store2[i])
+  lcis2[i]<-quantile(bvec2,0.025)
+  ucis2[i]<-quantile(bvec2,0.975)
+  meanboot2[i]<-mean(bvec2)
+}
+
+#plot occupied, available, both cohorts
+a <-  ggplot()
+ a+geom_line(aes(x=DO, y=OccCDF_final), color="#a6bddb", data=co16_1DO)+
+   geom_line(aes(x=DO, y=SurveyCDFFinal),linetype="dotted", data=shin16coDO)+
+  #geom_line(aes(x=DO,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
+  geom_ribbon(aes(x=DO,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
+  geom_line(aes(x=DO, y=OccCDF_final), color="#1c9099", data=co16_2DO)+
+  geom_ribbon(aes(x=DO,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  #geom_line(aes(x=DO,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
+  ylab("CDF")+xlab("Dissolved Oxygen (mg/L)")+ggtitle("Shinnecock 2016")+
+  theme_classic()
+#ggsave("cohortcdfs16_OccvAVDOCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+#save for later
+
+```
+
+Shinnecock 2017
+```{r}
+co17_1DO <- filter(shi17_e, !is.na(DO) & starred=="star") %>% arrange(DO)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+co17_2DO <- filter(shi17_l, !is.na(DO) & starred=="star") %>% arrange(DO)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+
+#AVAILABLE HABITAT: should be for both cohorts!!!
+shin17coDO <-filter(shin17co, !is.na(DO)& starred=="star")%>% arrange(DO)
+SurveyCDF = cumsum(shin17coDO$DO)
+SUMDO<-sum(shin17coDO$DO)
+shin17coDO <- mutate(shin17coDO, SurveyCDFFinal=SurveyCDF/SUMDO)  #this is the AVAILABLE HABITAT over ALL YEARS in Shinnecock
+
+#OCCUPIED HABITAT: cohort 1
+DO <- co17_1DO$DO
+yh=sum(co17_1DO$coCatch)
+ybar_strata=mean(co17_1DO$coCatch) 
+#create and plot CDF for occupied habitat
+co17_1DO <-mutate(co17_1DO, OccupiedDO =(coCatch/ybar_strata)*as.numeric(Pres)*DO)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedDO))
+SUMOccDO <-sum(co17_1DO$OccupiedDO)
+co17_1DO <-mutate(co17_1DO, OccCDF_final = OccupiedCDF/SUMOccDO)
+
+#OCCUPIED HABITAT: cohort 2
+DO <- co17_2DO$DO
+yh=sum(co17_2DO$coCatch)
+ybar_strata=mean(co17_2DO$coCatch) 
+#create and plot CDF for occupied habitat
+co17_2DO <-mutate(co17_2DO, OccupiedDO =(coCatch/ybar_strata)*as.numeric(Pres)*DO)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedDO))
+SUMOccDO <-sum(co17_2DO$OccupiedDO)
+co17_2DO <-mutate(co17_2DO, OccCDF_final = OccupiedCDF/SUMOccDO)
+
+#plot occupied, available, both cohorts
+a <-  ggplot(shin17coDO, aes(x=DO, y=SurveyCDFFinal))
+a+geom_line(linetype="dotted")+
+  geom_line(aes(x=DO, y=OccCDF_final), color="#a6bddb", data=co17_1DO)+
+  geom_line(aes(x=DO, y=OccCDF_final), color="#1c9099", data=co17_2DO)+
+  ylab("CDF")+xlab("Dissolved Oxygen (mg/L)")+ggtitle("Shinnecock 2017")+
+  theme_classic()
+#ggsave("cohortcdfs17_OccvAVDO.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+```
+
+**Bootstrap test for significant differences between cohorts: Shinnecock 2017**
+```{r}
+
+#TEST STATISTIC: DISTANCE BETWEEN COHORTS
+Dist_test<-abs(co17_1DO$OccCDF_final-co17_2DO$OccCDF_final)
+Test.statistic<-max(Dist_test)
+Test.statistic
+
+#BOOTSTRAPPING TEST STATISTIC AND CONFIDENCE INTERVALS
+###Bootstrapping occupied CPUE to create new CDFS
+DistBoot<-abs(co17_1DO$OccCDF_final-co17_2DO$OccCDF_final)#if not defined prior to running loop,
+TS.Boot<-max(DistBoot)  
+#defining variables
+catch1 <-co17_1DO$coCatch #total catch in that TOW
+catch2 <-co17_2DO$coCatch #total catch in that TOW
+ybar1 <-mean(catch1)
+ybar2 <-mean(catch2)
+Pres1 <-co17_1DO$Pres #Presence absence for that TOW
+Pres2 <-co17_2DO$Pres
+DO1 <-co17_1DO$DO
+DO2 <-co17_2DO$DO
+
+# THE BOOT LOOP
+set.seed(1234)
+results<-c()
+boot.store1 <-vector("list",length(10000))
+boot.store2 <-vector("list",length(10000))
+for(i in 1:10000) {  
+  #Cohort 1
+  BootSampler1<-sample(catch1, length(catch1),replace=FALSE)  #catch cohort 1
+  DOBoot1<-(BootSampler1/ybar1)*(as.numeric(Pres1))*DO1 
+  CDFBoot1<-cumsum(DOBoot1)
+  SUMBoot1<-sum(DOBoot1)
+  CDFFinalBoot1<-CDFBoot1/SUMBoot1
+  boot.store1[[i]]<-CDFFinalBoot1
+  #Cohort 2
+  BootSampler2<-sample(catch2, length(catch2),replace=FALSE)  #catch cohort 1
+  DOBoot2<-(BootSampler2/ybar2)*(as.numeric(Pres2))*DO2 
+  CDFBoot2<-cumsum(DOBoot2)
+  SUMBoot2<-sum(DOBoot2)
+  CDFFinalBoot2<-CDFBoot2/SUMBoot2
+  boot.store2[[i]]<-CDFFinalBoot2
+  #Test statistic
+  DistBoot<-abs(CDFFinalBoot1-CDFFinalBoot2) #absolute value from bootstrapped and observed
+  results[i]<-max(DistBoot) #store them here
+  }
+summary(results)
+
+#SIGNIFICANCE TEST RESULT
+sum(abs(results>abs(Test.statistic))/10000) ## See how many of the values in 'result'are more extreme than the observed value
+
+#EXTRACT BOOTS FOR CI
+#Cohort1
+b.store1 <- transpose(boot.store1)  
+lcis1 <-c()
+ucis1 <-c()
+meanboot1<-c()
+for(i in 1:length(b.store1)) { 
+  bvec1 <-unlist(b.store1[i])
+  lcis1[i]<-quantile(bvec1,0.025)
+  ucis1[i]<-quantile(bvec1,0.975)
+  meanboot1[i]<-mean(bvec1)
+}
+b.store2 <- transpose(boot.store2)  
+lcis2 <-c()
+ucis2 <-c()
+meanboot2<-c()
+for(i in 1:length(b.store2)) { 
+  bvec2 <-unlist(b.store2[i])
+  lcis2[i]<-quantile(bvec2,0.025)
+  ucis2[i]<-quantile(bvec2,0.975)
+  meanboot2[i]<-mean(bvec2)
+}
+
+#plot occupied, available, both cohorts
+a <-  ggplot()
+ a+geom_line(aes(x=DO, y=OccCDF_final), color="#a6bddb", data=co17_1DO)+
+    geom_line(aes(x=DO, y=SurveyCDFFinal),linetype="dotted", data=shin17coDO)+
+  #geom_line(aes(x=DO,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
+  geom_ribbon(aes(x=DO,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
+  geom_line(aes(x=DO, y=OccCDF_final), color="#1c9099", data=co17_2DO)+
+  geom_ribbon(aes(x=DO,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  #geom_line(aes(x=DO,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
+  ylab("CDF")+xlab("Dissolved Oxygen (mg/L)")+ggtitle("Shinnecock 2017")+
+  theme_classic()
+#ggsave("cohortcdfs17_OccvAVDOCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+```
+
+**Percentiles**
+```{r, warning=FALSE, echo=TRUE}
+#Calculating Quantiles
+
+#FUNCTION TO EXTRACT PERCENTILES OF OCCUPIED HABITAT
+percentile.func <-function(df){
+df <- mutate(df, BTcolumn=round(DO,digits=1),OccCDFcolumn=round(OccCDF_final,digits=2)) 
+  
+OccPer.5 <-(df[df$OccCDFcolumn=='0.05','BTcolumn']) #not interpolated version 
+OccPer.50 <-(df[df$OccCDFcolumn=='0.5','BTcolumn'])
+OccPer.95 <-(df[df$OccCDFcolumn=='0.95','BTcolumn'])
+not.interpolated <-list(OccPer.5,OccPer.50,OccPer.95)
+  #occ.ni <- rapply(not.interpolated, mean)
+#interpolated version 
+TabSurveyApprox<-approx(df$BTcolumn,df$OccCDFcolumn, n=20000)  
+TabSurveyApproxBT<-round(TabSurveyApprox$x,digits=3)        
+TabSurveyApproxSurveyOccCDF<-round(TabSurveyApprox$y,digits=3)   
+OccTabSurveyAp<-data.frame(cbind(TabSurveyApproxBT,TabSurveyApproxSurveyOccCDF))   
+OccPer.5.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.05','TabSurveyApproxBT'])  #(INTERPOLATED)
+OccPer.50.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.5','TabSurveyApproxBT'])
+OccPer.95.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.95','TabSurveyApproxBT'])
+interpolated <-list(OccPer.5.ap,OccPer.50.ap,OccPer.95.ap)
+occ.i <-rapply(interpolated, mean)
+#out <-list(not.interpolated, occ.i)
+occ.i
+}
+```
+
+**Apply percentile function**
+```{r}
+allcoDO <-bind_rows(co16_1DO,co16_2DO,co17_1DO,co17_2DO) 
+allcoDO <-separate(allcoDO, Date,c("Year","m","d"), sep="-", remove=FALSE)
+split.percent <-allcoDO %>% split(list(.$Year,.$co))%>% map_dfr(percentile.func) #map it
+
+split.percent
+```
+
+
+**SALINITY**
+
+***Compare cohorts, make separate CDFS for each**
+Shinnecock 2016
+```{r}
+co16_1SAL <- filter(shi16_e, !is.na(SAL) & SAL > 0 & SAL < 40 & starred=="star") %>% arrange(SAL)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+co16_2SAL <- filter(shi16_l, !is.na(SAL) & SAL > 0 & SAL < 40 & starred=="star") %>% arrange(SAL)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+
+#AVAILABLE HABITAT: should be for both cohorts!!!
+shin16coSAL <-filter(shin16co, !is.na(SAL) & SAL > 0 & SAL < 40 & starred=="star")%>% arrange(SAL)
+SurveyCDF = cumsum(shin16coSAL$SAL)
+SUMSAL<-sum(shin16coSAL$SAL)
+shin16coSAL <- mutate(shin16coSAL, SurveyCDFFinal=SurveyCDF/SUMSAL)  #this is the AVAILABLE HABITAT over ALL YEARS in Shinnecock
+
+#OCCUPIED HABITAT: cohort 1
+SAL <- co16_1SAL$SAL
+yh=sum(co16_1SAL$coCatch)
+ybar_strata=mean(co16_1SAL$coCatch) 
+#create and plot CDF for occupied habitat
+co16_1SAL <-mutate(co16_1SAL, OccupiedSAL =(coCatch/ybar_strata)*as.numeric(Pres)*SAL)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedSAL))
+SUMOccSAL <-sum(co16_1SAL$OccupiedSAL)
+co16_1SAL <-mutate(co16_1SAL, OccCDF_final = OccupiedCDF/SUMOccSAL)
+
+#OCCUPIED HABITAT: cohort 2
+SAL <- co16_2SAL$SAL
+yh=sum(co16_2SAL$coCatch)
+ybar_strata=mean(co16_2SAL$coCatch) 
+#create and plot CDF for occupied habitat
+co16_2SAL <-mutate(co16_2SAL, OccupiedSAL =(coCatch/ybar_strata)*as.numeric(Pres)*SAL)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedSAL))
+SUMOccSAL <-sum(co16_2SAL$OccupiedSAL)
+co16_2SAL <-mutate(co16_2SAL, OccCDF_final = OccupiedCDF/SUMOccSAL)
+
+#plot occupied, available, both cohorts
+a <-  ggplot(shin16coSAL, aes(x=SAL, y=SurveyCDFFinal))
+a+geom_line(linetype="dotted")+
+  geom_line(aes(x=SAL, y=OccCDF_final), color="#a6bddb", data=co16_1SAL)+
+  geom_line(aes(x=SAL, y=OccCDF_final), color="#1c9099", data=co16_2SAL)+
+  ylab("CDF")+xlab("Salinity (ppt)")+ggtitle("Shinnecock 2016")+
+  theme_classic()
+#ggsave("cohortcdfs16_OccvAVSAL.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+```
+
+**Bootstrap test for significant differences between cohorts: Shinnecock 2016**
+```{r}
+
+#TEST STATISTIC: DISTANCE BETWEEN COHORTS
+Dist_test<-abs(co16_1SAL$OccCDF_final-co16_2SAL$OccCDF_final)
+Test.statistic<-max(Dist_test)
+Test.statistic
+
+#BOOTSTRAPPING TEST STATISTIC AND CONFIDENCE INTERVALS
+###Bootstrapping occupied CPUE to create new CDFS
+DistBoot<-abs(co16_1SAL$OccCDF_final-co16_2SAL$OccCDF_final)#if not defined prior to running loop,
+TS.Boot<-max(DistBoot)  
+#defining variables
+catch1 <-co16_1SAL$coCatch #total catch in that TOW
+catch2 <-co16_2SAL$coCatch #total catch in that TOW
+ybar1 <-mean(catch1)
+ybar2 <-mean(catch2)
+Pres1 <-co16_1SAL$Pres #Presence absence for that TOW
+Pres2 <-co16_2SAL$Pres
+SAL1 <-co16_1SAL$SAL
+SAL2 <-co16_2SAL$SAL
+
+# THE BOOT LOOP
+set.seed(1234)
+results<-c()
+boot.store1 <-vector("list",length(10000))
+boot.store2 <-vector("list",length(10000))
+for(i in 1:10000) {  
+  #Cohort 1
+  BootSampler1<-sample(catch1, length(catch1),replace=FALSE)  #catch cohort 1
+  SALBoot1<-(BootSampler1/ybar1)*(as.numeric(Pres1))*SAL1 
+  CDFBoot1<-cumsum(SALBoot1)
+  SUMBoot1<-sum(SALBoot1)
+  CDFFinalBoot1<-CDFBoot1/SUMBoot1
+  boot.store1[[i]]<-CDFFinalBoot1
+  #Cohort 2
+  BootSampler2<-sample(catch2, length(catch2),replace=FALSE)  #catch cohort 1
+  SALBoot2<-(BootSampler2/ybar2)*(as.numeric(Pres2))*SAL2 
+  CDFBoot2<-cumsum(SALBoot2)
+  SUMBoot2<-sum(SALBoot2)
+  CDFFinalBoot2<-CDFBoot2/SUMBoot2
+  boot.store2[[i]]<-CDFFinalBoot2
+  #Test statistic
+  DistBoot<-abs(CDFFinalBoot1-CDFFinalBoot2) #absolute value from bootstrapped and observed
+  results[i]<-max(DistBoot) #store them here
+  }
+summary(results)
+
+#SIGNIFICANCE TEST RESULT
+sum(abs(results>abs(Test.statistic))/10000) ## See how many of the values in 'result'are more extreme than the observed value
+
+#EXTRACT BOOTS FOR CI
+#Cohort1
+b.store1 <- transpose(boot.store1)  
+lcis1 <-c()
+ucis1 <-c()
+meanboot1<-c()
+for(i in 1:length(b.store1)) { 
+  bvec1 <-unlist(b.store1[i])
+  lcis1[i]<-quantile(bvec1,0.025)
+  ucis1[i]<-quantile(bvec1,0.975)
+  meanboot1[i]<-mean(bvec1)
+}
+b.store2 <- transpose(boot.store2)  
+lcis2 <-c()
+ucis2 <-c()
+meanboot2<-c()
+for(i in 1:length(b.store2)) { 
+  bvec2 <-unlist(b.store2[i])
+  lcis2[i]<-quantile(bvec2,0.025)
+  ucis2[i]<-quantile(bvec2,0.975)
+  meanboot2[i]<-mean(bvec2)
+}
+
+#plot occupied, available, both cohorts
+a <-  ggplot()
+ a+geom_line(aes(x=SAL, y=OccCDF_final), color="#a6bddb", data=co16_1SAL)+
+   geom_line(aes(x=SAL, y=SurveyCDFFinal),linetype="dotted", data=shin16coSAL)+
+  #geom_line(aes(x=SAL,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
+  geom_ribbon(aes(x=SAL,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
+  geom_line(aes(x=SAL, y=OccCDF_final), color="#1c9099", data=co16_2SAL)+
+  geom_ribbon(aes(x=SAL,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  #geom_line(aes(x=SAL,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
+  ylab("CDF")+xlab("Salinity (ppt)")+ggtitle("Shinnecock 2016")+
+  theme_classic()
+#ggsave("cohortcdfs16_OccvAVSALCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+#save for later
+
+```
+
+
+Shinnecock 2017
+```{r}
+co17_1SAL <- filter(shi17_e, !is.na(SAL) &  SAL > 0 & SAL < 40 & starred=="star") %>% arrange(SAL)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+co17_2SAL <- filter(shi17_l, !is.na(SAL) & SAL > 0 & SAL < 40 & starred=="star") %>% arrange(SAL)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+
+#AVAILABLE HABITAT: should be for both cohorts!!!
+shin17coSAL <-filter(shin17co, !is.na(SAL)& SAL > 0 & SAL < 40 & starred=="star")%>% arrange(SAL)
+SurveyCDF = cumsum(shin17coSAL$SAL)
+SUMSAL<-sum(shin17coSAL$SAL)
+shin17coSAL <- mutate(shin17coSAL, SurveyCDFFinal=SurveyCDF/SUMSAL)  #this is the AVAILABLE HABITAT over ALL YEARS in Shinnecock
+
+#OCCUPIED HABITAT: cohort 1
+SAL <- co17_1SAL$SAL
+yh=sum(co17_1SAL$coCatch)
+ybar_strata=mean(co17_1SAL$coCatch) 
+#create and plot CDF for occupied habitat
+co17_1SAL <-mutate(co17_1SAL, OccupiedSAL =(coCatch/ybar_strata)*as.numeric(Pres)*SAL)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedSAL))
+SUMOccSAL <-sum(co17_1SAL$OccupiedSAL)
+co17_1SAL <-mutate(co17_1SAL, OccCDF_final = OccupiedCDF/SUMOccSAL)
+
+#OCCUPIED HABITAT: cohort 2
+SAL <- co17_2SAL$SAL
+yh=sum(co17_2SAL$coCatch)
+ybar_strata=mean(co17_2SAL$coCatch) 
+#create and plot CDF for occupied habitat
+co17_2SAL <-mutate(co17_2SAL, OccupiedSAL =(coCatch/ybar_strata)*as.numeric(Pres)*SAL)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedSAL))
+SUMOccSAL <-sum(co17_2SAL$OccupiedSAL)
+co17_2SAL <-mutate(co17_2SAL, OccCDF_final = OccupiedCDF/SUMOccSAL)
+
+#plot occupied, available, both cohorts
+a <-  ggplot(shin17coSAL, aes(x=SAL, y=SurveyCDFFinal))
+a+geom_line(linetype="dotted")+
+  geom_line(aes(x=SAL, y=OccCDF_final), color="#a6bddb", data=co17_1SAL)+
+  geom_line(aes(x=SAL, y=OccCDF_final), color="#1c9099", data=co17_2SAL)+
+  ylab("CDF")+xlab("Salinity (ppt)")+ggtitle("Shinnecock 2017")+
+  theme_classic()
+#ggsave("cohortcdfs17_OccvAVSAL.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+```
+
+
+**Bootstrap test for significant differences between cohorts: Shinnecock 2017**
+```{r}
+
+#TEST STATISTIC: DISTANCE BETWEEN COHORTS
+Dist_test<-abs(co17_1SAL$OccCDF_final-co17_2SAL$OccCDF_final)
+Test.statistic<-max(Dist_test)
+Test.statistic
+
+#BOOTSTRAPPING TEST STATISTIC AND CONFIDENCE INTERVALS
+###Bootstrapping occupied CPUE to create new CDFS
+DistBoot<-abs(co17_1SAL$OccCDF_final-co17_2SAL$OccCDF_final)#if not defined prior to running loop,
+TS.Boot<-max(DistBoot)  
+#defining variables
+catch1 <-co17_1SAL$coCatch #total catch in that TOW
+catch2 <-co17_2SAL$coCatch #total catch in that TOW
+ybar1 <-mean(catch1)
+ybar2 <-mean(catch2)
+Pres1 <-co17_1SAL$Pres #Presence absence for that TOW
+Pres2 <-co17_2SAL$Pres
+SAL1 <-co17_1SAL$SAL
+SAL2 <-co17_2SAL$SAL
+
+# THE BOOT LOOP
+set.seed(1234)
+results<-c()
+boot.store1 <-vector("list",length(10000))
+boot.store2 <-vector("list",length(10000))
+for(i in 1:10000) {  
+  #Cohort 1
+  BootSampler1<-sample(catch1, length(catch1),replace=FALSE)  #catch cohort 1
+  SALBoot1<-(BootSampler1/ybar1)*(as.numeric(Pres1))*SAL1 
+  CDFBoot1<-cumsum(SALBoot1)
+  SUMBoot1<-sum(SALBoot1)
+  CDFFinalBoot1<-CDFBoot1/SUMBoot1
+  boot.store1[[i]]<-CDFFinalBoot1
+  #Cohort 2
+  BootSampler2<-sample(catch2, length(catch2),replace=FALSE)  #catch cohort 1
+  SALBoot2<-(BootSampler2/ybar2)*(as.numeric(Pres2))*SAL2 
+  CDFBoot2<-cumsum(SALBoot2)
+  SUMBoot2<-sum(SALBoot2)
+  CDFFinalBoot2<-CDFBoot2/SUMBoot2
+  boot.store2[[i]]<-CDFFinalBoot2
+  #Test statistic
+  DistBoot<-abs(CDFFinalBoot1-CDFFinalBoot2) #absolute value from bootstrapped and observed
+  results[i]<-max(DistBoot) #store them here
+  }
+summary(results)
+
+#SIGNIFICANCE TEST RESULT
+sum(abs(results>abs(Test.statistic))/10000) ## See how many of the values in 'result'are more extreme than the observed value
+
+#EXTRACT BOOTS FOR CI
+#Cohort1
+b.store1 <- transpose(boot.store1)  
+lcis1 <-c()
+ucis1 <-c()
+meanboot1<-c()
+for(i in 1:length(b.store1)) { 
+  bvec1 <-unlist(b.store1[i])
+  lcis1[i]<-quantile(bvec1,0.025)
+  ucis1[i]<-quantile(bvec1,0.975)
+  meanboot1[i]<-mean(bvec1)
+}
+b.store2 <- transpose(boot.store2)  
+lcis2 <-c()
+ucis2 <-c()
+meanboot2<-c()
+for(i in 1:length(b.store2)) { 
+  bvec2 <-unlist(b.store2[i])
+  lcis2[i]<-quantile(bvec2,0.025)
+  ucis2[i]<-quantile(bvec2,0.975)
+  meanboot2[i]<-mean(bvec2)
+}
+
+#plot occupied, available, both cohorts
+a <-  ggplot()
+ a+geom_line(aes(x=SAL, y=OccCDF_final), color="#a6bddb", data=co17_1SAL)+
+    geom_line(aes(x=SAL, y=SurveyCDFFinal),linetype="dotted", data=shin17coSAL)+
+  #geom_line(aes(x=SAL,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
+  geom_ribbon(aes(x=SAL,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
+  geom_line(aes(x=SAL, y=OccCDF_final), color="#1c9099", data=co17_2SAL)+
+  geom_ribbon(aes(x=SAL,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  #geom_line(aes(x=SAL,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
+  ylab("CDF")+xlab("Salinity (ppt)")+ggtitle("Shinnecock 2017")+
+  theme_classic()
+#ggsave("cohortcdfs17_OccvAVSALCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+```
+
+**Percentiles**
+```{r, warning=FALSE, echo=TRUE}
+#Calculating Quantiles
+
+#FUNCTION TO EXTRACT PERCENTILES OF OCCUPIED HABITAT
+percentile.func <-function(df){
+df <- mutate(df, BTcolumn=round(SAL,digits=1),OccCDFcolumn=round(OccCDF_final,digits=2)) 
+  
+OccPer.5 <-(df[df$OccCDFcolumn=='0.05','BTcolumn']) #not interpolated version 
+OccPer.50 <-(df[df$OccCDFcolumn=='0.5','BTcolumn'])
+OccPer.95 <-(df[df$OccCDFcolumn=='0.95','BTcolumn'])
+not.interpolated <-list(OccPer.5,OccPer.50,OccPer.95)
+  #occ.ni <- rapply(not.interpolated, mean)
+#interpolated version 
+TabSurveyApprox<-approx(df$BTcolumn,df$OccCDFcolumn, n=20000)  
+TabSurveyApproxBT<-round(TabSurveyApprox$x,digits=3)        
+TabSurveyApproxSurveyOccCDF<-round(TabSurveyApprox$y,digits=3)   
+OccTabSurveyAp<-data.frame(cbind(TabSurveyApproxBT,TabSurveyApproxSurveyOccCDF))   
+OccPer.5.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.05','TabSurveyApproxBT'])  #(INTERPOLATED)
+OccPer.50.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.5','TabSurveyApproxBT'])
+OccPer.95.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.95','TabSurveyApproxBT'])
+interpolated <-list(OccPer.5.ap,OccPer.50.ap,OccPer.95.ap)
+occ.i <-rapply(interpolated, mean)
+#out <-list(not.interpolated, occ.i)
+occ.i
+}
+```
+
+**Apply percentile function**
+```{r}
+allcoSAL <-bind_rows(co16_1SAL,co16_2SAL,co17_1SAL,co17_2SAL) 
+allcoSAL <-separate(allcoSAL, Date,c("Year","m","d"), sep="-", remove=FALSE)
+split.percent <-allcoSAL %>% split(list(.$Year,.$co))%>% map_dfr(percentile.func) #map it
+
+split.percent
+``` 
+
+- We could also look at depth, possibly. 
+
+***Compare cohorts, make separate CDFS for each**
+Shinnecock 2016
+```{r}
+co16_1Depth <- filter(shi16_e, !is.na(Depth) & starred=="star") %>% arrange(Depth)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+co16_2Depth <- filter(shi16_l, !is.na(Depth) & starred=="star") %>% arrange(Depth)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+
+#AVAILABLE HABITAT: should be for both cohorts!!!
+shin16coDepth <-filter(shin16co, !is.na(Depth) & starred=="star")%>% arrange(Depth)
+SurveyCDF = cumsum(shin16coDepth$Depth)
+SUMDepth<-sum(shin16coDepth$Depth)
+shin16coDepth <- mutate(shin16coDepth, SurveyCDFFinal=SurveyCDF/SUMDepth)  #this is the AVAILABLE HABITAT over ALL YEARS in Shinnecock
+
+#OCCUPIED HABITAT: cohort 1
+Depth <- co16_1Depth$Depth
+yh=sum(co16_1Depth$coCatch)
+ybar_strata=mean(co16_1Depth$coCatch) 
+#create and plot CDF for occupied habitat
+co16_1Depth <-mutate(co16_1Depth, OccupiedDepth =(coCatch/ybar_strata)*as.numeric(Pres)*Depth)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedDepth))
+SUMOccDepth <-sum(co16_1Depth$OccupiedDepth)
+co16_1Depth <-mutate(co16_1Depth, OccCDF_final = OccupiedCDF/SUMOccDepth)
+
+#OCCUPIED HABITAT: cohort 2
+Depth <- co16_2Depth$Depth
+yh=sum(co16_2Depth$coCatch)
+ybar_strata=mean(co16_2Depth$coCatch) 
+#create and plot CDF for occupied habitat
+co16_2Depth <-mutate(co16_2Depth, OccupiedDepth =(coCatch/ybar_strata)*as.numeric(Pres)*Depth)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedDepth))
+SUMOccDepth <-sum(co16_2Depth$OccupiedDepth)
+co16_2Depth <-mutate(co16_2Depth, OccCDF_final = OccupiedCDF/SUMOccDepth)
+
+#plot occupied, available, both cohorts
+a <-  ggplot(shin16coDepth, aes(x=Depth, y=SurveyCDFFinal))
+a+geom_line(linetype="dotted")+
+  geom_line(aes(x=Depth, y=OccCDF_final), color="#a6bddb", data=co16_1Depth)+
+  geom_line(aes(x=Depth, y=OccCDF_final), color="#1c9099", data=co16_2Depth)+
+  ylab("CDF")+xlab("Depth (m)")+ggtitle("Shinnecock 2016")+
+  theme_classic()
+#ggsave("cohortcdfs16_OccvAVDepth.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+```
+
+
+**Bootstrap test for significant differences between cohorts: Shinnecock 2016**
+```{r}
+
+#TEST STATISTIC: DISTANCE BETWEEN COHORTS
+Dist_test<-abs(co16_1Depth$OccCDF_final-co16_2Depth$OccCDF_final)
+Test.statistic<-max(Dist_test)
+Test.statistic
+
+#BOOTSTRAPPING TEST STATISTIC AND CONFIDENCE INTERVALS
+###Bootstrapping occupied CPUE to create new CDFS
+DistBoot<-abs(co16_1Depth$OccCDF_final-co16_2Depth$OccCDF_final)#if not defined prior to running loop,
+TS.Boot<-max(DistBoot)  
+#defining variables
+catch1 <-co16_1Depth$coCatch #total catch in that TOW
+catch2 <-co16_2Depth$coCatch #total catch in that TOW
+ybar1 <-mean(catch1)
+ybar2 <-mean(catch2)
+Pres1 <-co16_1Depth$Pres #Presence absence for that TOW
+Pres2 <-co16_2Depth$Pres
+Depth1 <-co16_1Depth$Depth
+Depth2 <-co16_2Depth$Depth
+
+# THE BOOT LOOP
+set.seed(1234)
+results<-c()
+boot.store1 <-vector("list",length(10000))
+boot.store2 <-vector("list",length(10000))
+for(i in 1:10000) {  
+  #Cohort 1
+  BootSampler1<-sample(catch1, length(catch1),replace=FALSE)  #catch cohort 1
+  DepthBoot1<-(BootSampler1/ybar1)*(as.numeric(Pres1))*Depth1 
+  CDFBoot1<-cumsum(DepthBoot1)
+  SUMBoot1<-sum(DepthBoot1)
+  CDFFinalBoot1<-CDFBoot1/SUMBoot1
+  boot.store1[[i]]<-CDFFinalBoot1
+  #Cohort 2
+  BootSampler2<-sample(catch2, length(catch2),replace=FALSE)  #catch cohort 1
+  DepthBoot2<-(BootSampler2/ybar2)*(as.numeric(Pres2))*Depth2 
+  CDFBoot2<-cumsum(DepthBoot2)
+  SUMBoot2<-sum(DepthBoot2)
+  CDFFinalBoot2<-CDFBoot2/SUMBoot2
+  boot.store2[[i]]<-CDFFinalBoot2
+  #Test statistic
+  DistBoot<-abs(CDFFinalBoot1-CDFFinalBoot2) #absolute value from bootstrapped and observed
+  results[i]<-max(DistBoot) #store them here
+  }
+summary(results)
+
+#SIGNIFICANCE TEST RESULT
+sum(abs(results>abs(Test.statistic))/10000) ## See how many of the values in 'result'are more extreme than the observed value
+
+#EXTRACT BOOTS FOR CI
+#Cohort1
+b.store1 <- transpose(boot.store1)  
+lcis1 <-c()
+ucis1 <-c()
+meanboot1<-c()
+for(i in 1:length(b.store1)) { 
+  bvec1 <-unlist(b.store1[i])
+  lcis1[i]<-quantile(bvec1,0.025)
+  ucis1[i]<-quantile(bvec1,0.975)
+  meanboot1[i]<-mean(bvec1)
+}
+b.store2 <- transpose(boot.store2)  
+lcis2 <-c()
+ucis2 <-c()
+meanboot2<-c()
+for(i in 1:length(b.store2)) { 
+  bvec2 <-unlist(b.store2[i])
+  lcis2[i]<-quantile(bvec2,0.025)
+  ucis2[i]<-quantile(bvec2,0.975)
+  meanboot2[i]<-mean(bvec2)
+}
+
+#plot occupied, available, both cohorts
+a <-  ggplot()
+ a+geom_line(aes(x=Depth, y=OccCDF_final), color="#a6bddb", data=co16_1Depth)+
+   geom_line(aes(x=Depth, y=SurveyCDFFinal),linetype="dotted", data=shin16coDepth)+
+  #geom_line(aes(x=Depth,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
+  geom_ribbon(aes(x=Depth,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
+  geom_line(aes(x=Depth, y=OccCDF_final), color="#1c9099", data=co16_2Depth)+
+  geom_ribbon(aes(x=Depth,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  #geom_line(aes(x=Depth,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
+  ylab("CDF")+xlab("Depth (m)")+ggtitle("Shinnecock 2016")+
+  theme_classic()
+#ggsave("cohortcdfs16_OccvAVDepthCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+#save for later
+
+```
+
+Shinnecock 2017
+```{r}
+co17_1Depth <- filter(shi17_e, !is.na(Depth) & starred=="star") %>% arrange(Depth)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+co17_2Depth <- filter(shi17_l, !is.na(Depth) & starred=="star") %>% arrange(Depth)%>% mutate(Pres=ifelse(coCatch > 0,1,0))
+
+#AVAILABLE HABITAT: should be for both cohorts!!!
+shin17coDepth <-filter(shin17co, !is.na(Depth)& starred=="star")%>% arrange(Depth)
+SurveyCDF = cumsum(shin17coDepth$Depth)
+SUMDepth<-sum(shin17coDepth$Depth)
+shin17coDepth <- mutate(shin17coDepth, SurveyCDFFinal=SurveyCDF/SUMDepth)  #this is the AVAILABLE HABITAT over ALL YEARS in Shinnecock
+
+#OCCUPIED HABITAT: cohort 1
+Depth <- co17_1Depth$Depth
+yh=sum(co17_1Depth$coCatch)
+ybar_strata=mean(co17_1Depth$coCatch) 
+#create and plot CDF for occupied habitat
+co17_1Depth <-mutate(co17_1Depth, OccupiedDepth =(coCatch/ybar_strata)*as.numeric(Pres)*Depth)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedDepth))
+SUMOccDepth <-sum(co17_1Depth$OccupiedDepth)
+co17_1Depth <-mutate(co17_1Depth, OccCDF_final = OccupiedCDF/SUMOccDepth)
+
+#OCCUPIED HABITAT: cohort 2
+Depth <- co17_2Depth$Depth
+yh=sum(co17_2Depth$coCatch)
+ybar_strata=mean(co17_2Depth$coCatch) 
+#create and plot CDF for occupied habitat
+co17_2Depth <-mutate(co17_2Depth, OccupiedDepth =(coCatch/ybar_strata)*as.numeric(Pres)*Depth)%>% 
+  mutate(OccupiedCDF =cumsum(OccupiedDepth))
+SUMOccDepth <-sum(co17_2Depth$OccupiedDepth)
+co17_2Depth <-mutate(co17_2Depth, OccCDF_final = OccupiedCDF/SUMOccDepth)
+
+#plot occupied, available, both cohorts
+a <-  ggplot(shin17coDepth, aes(x=Depth, y=SurveyCDFFinal))
+a+geom_line(linetype="dotted")+
+  geom_line(aes(x=Depth, y=OccCDF_final), color="#a6bddb", data=co17_1Depth)+
+  geom_line(aes(x=Depth, y=OccCDF_final), color="#1c9099", data=co17_2Depth)+
+  ylab("CDF")+xlab("Depth (m)")+ggtitle("Shinnecock 2017")+
+  theme_classic()
+#ggsave("cohortcdfs17_OccvAVDepth.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+```
+
+**Bootstrap test for significant differences between cohorts: Shinnecock 2017**
+```{r}
+
+#TEST STATISTIC: DISTANCE BETWEEN COHORTS
+Dist_test<-abs(co17_1Depth$OccCDF_final-co17_2Depth$OccCDF_final)
+Test.statistic<-max(Dist_test)
+Test.statistic
+
+#BOOTSTRAPPING TEST STATISTIC AND CONFIDENCE INTERVALS
+###Bootstrapping occupied CPUE to create new CDFS
+DistBoot<-abs(co17_1Depth$OccCDF_final-co17_2Depth$OccCDF_final)#if not defined prior to running loop,
+TS.Boot<-max(DistBoot)  
+#defining variables
+catch1 <-co17_1Depth$coCatch #total catch in that TOW
+catch2 <-co17_2Depth$coCatch #total catch in that TOW
+ybar1 <-mean(catch1)
+ybar2 <-mean(catch2)
+Pres1 <-co17_1Depth$Pres #Presence absence for that TOW
+Pres2 <-co17_2Depth$Pres
+Depth1 <-co17_1Depth$Depth
+Depth2 <-co17_2Depth$Depth
+
+# THE BOOT LOOP
+set.seed(1234)
+results<-c()
+boot.store1 <-vector("list",length(10000))
+boot.store2 <-vector("list",length(10000))
+for(i in 1:10000) {  
+  #Cohort 1
+  BootSampler1<-sample(catch1, length(catch1),replace=FALSE)  #catch cohort 1
+  DepthBoot1<-(BootSampler1/ybar1)*(as.numeric(Pres1))*Depth1 
+  CDFBoot1<-cumsum(DepthBoot1)
+  SUMBoot1<-sum(DepthBoot1)
+  CDFFinalBoot1<-CDFBoot1/SUMBoot1
+  boot.store1[[i]]<-CDFFinalBoot1
+  #Cohort 2
+  BootSampler2<-sample(catch2, length(catch2),replace=FALSE)  #catch cohort 1
+  DepthBoot2<-(BootSampler2/ybar2)*(as.numeric(Pres2))*Depth2 
+  CDFBoot2<-cumsum(DepthBoot2)
+  SUMBoot2<-sum(DepthBoot2)
+  CDFFinalBoot2<-CDFBoot2/SUMBoot2
+  boot.store2[[i]]<-CDFFinalBoot2
+  #Test statistic
+  DistBoot<-abs(CDFFinalBoot1-CDFFinalBoot2) #absolute value from bootstrapped and observed
+  results[i]<-max(DistBoot) #store them here
+  }
+summary(results)
+
+#SIGNIFICANCE TEST RESULT
+sum(abs(results>abs(Test.statistic))/10000) ## See how many of the values in 'result'are more extreme than the observed value
+
+#EXTRACT BOOTS FOR CI
+#Cohort1
+b.store1 <- transpose(boot.store1)  
+lcis1 <-c()
+ucis1 <-c()
+meanboot1<-c()
+for(i in 1:length(b.store1)) { 
+  bvec1 <-unlist(b.store1[i])
+  lcis1[i]<-quantile(bvec1,0.025)
+  ucis1[i]<-quantile(bvec1,0.975)
+  meanboot1[i]<-mean(bvec1)
+}
+b.store2 <- transpose(boot.store2)  
+lcis2 <-c()
+ucis2 <-c()
+meanboot2<-c()
+for(i in 1:length(b.store2)) { 
+  bvec2 <-unlist(b.store2[i])
+  lcis2[i]<-quantile(bvec2,0.025)
+  ucis2[i]<-quantile(bvec2,0.975)
+  meanboot2[i]<-mean(bvec2)
+}
+
+#plot occupied, available, both cohorts
+a <-  ggplot()
+ a+geom_line(aes(x=Depth, y=OccCDF_final), color="#a6bddb", data=co17_1Depth)+
+    geom_line(aes(x=Depth, y=SurveyCDFFinal),linetype="dotted", data=shin17coDepth)+
+  #geom_line(aes(x=Depth,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
+  geom_ribbon(aes(x=Depth,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
+  geom_line(aes(x=Depth, y=OccCDF_final), color="#1c9099", data=co17_2Depth)+
+  geom_ribbon(aes(x=Depth,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  #geom_line(aes(x=Depth,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
+  ylab("CDF")+xlab("Depth (m)")+ggtitle("Shinnecock 2017")+
+  theme_classic()
+#ggsave("cohortcdfs17_OccvAVDepthCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+```
+

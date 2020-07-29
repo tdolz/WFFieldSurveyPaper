@@ -51,6 +51,24 @@ This builds off the data wrangling done in the Rscript 'bayesgamsattempt.R' and 
 https://www.rensvandeschoot.com/tutorials/r-linear-regression-bayesian-using-brms/ 
 https://cchecastaldo.github.io/BayesianShortCourse/Syllabus.html
 
+**this script includes**
+ total effort and capture table
+- plots of CPUE by week 
+- graph abundance for all years and bays
+- extract regression coefficients for table
+- compare mortality estimates with dummy regression
+- Tukey HSD to extract differences between the intercepts
+- LSmeans for pairwise comparisons of slopes
+- Chapman-Robson method to extract mortality estimates
+- mortality estimates barplot
+- selectivity correct lyndie's (2010-2011) length data
+- ggridges graphs for length data each year and bay
+- growth by year
+- growth ANCOVAs
+- lsmeans for growth estimate pairwise comparisons
+- regressions for each bayyear growth
+
+
 ```{r, include=FALSE}
 #keeping everything in this folder
 setwd("/Users//tdolan/Documents//R-Github//WFFieldSurveyPaper")

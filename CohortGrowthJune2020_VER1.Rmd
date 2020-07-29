@@ -27,6 +27,26 @@ We could try to compare mortality but think about this more.
 
 **In this version we have used corrected catch +1 to calculate mortality slopes
 
+**This markdown script includes**
+- Cohort assignment including a comparison of mixture vs. normal model fits. 
+- alter the plot mixEM function to fix the density bars. 
+- function to do cohort assignment with mixtools
+- A multi-histogram function that we are not using because it's broken
+- another broken multi-histogram function with a custom distribution
+- cohort assignment applied to all bays and years. 
+- a comparison of cohorts assigned by our function to those assigned by age. 
+-  mortality regression standardized to days since peak
+- extract coefficients of regression
+- facet plot fo cohort regression in Shinnecock
+- shinnecock and mattituck mortality ANCOVAs, Tukey Test and LS means 
+- extract mortality estimate for each cohort from catch curves
+- barplots of mortality estimates
+- cohort regressions, ANCOVAS, tests, plots for growth
+- ggridges plot for cohorts
+- extract regression coefficients for growth from each cohort
+-  barplots of regression estimates for growth
+-
+
 
 ```{r, include=FALSE}
 #keeping everything in this folder
