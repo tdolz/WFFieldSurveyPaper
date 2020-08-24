@@ -1,0 +1,1561 @@
+---
+title: "TaraCDF_skyler GITHUB VERSION"
+author: "tara"
+date: "5/20/2020"
+output:
+  pdf_document: default
+  html_document: default
+theme: readable
+---
+
+```{r setup, echo=FALSE, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning=FALSE, cache=TRUE)
+```
+
+## R Markdown
+
+**THIS IS THE CHILD DOCUMENT OF taraCDFS2.RMD**
+
+The difference here is that we are making a different CDF for each BAY YEAR
+This is my attempt to replicate Skyler's CDF 
+
+**To do list**
++ output table of test statistics doing pairwise comparison of bays within a year, for 2010 and 2016 - for every habitat variable. 
++ output table of test statistics doing pairwise comparison of years within a by, for Shinnecock only - for every habitat variable. 
++ recreate occupied vs. available habitat graphs, but for each Bay-Year.
++ reacreate percentile table for each Bay~Year - do not bother to bootstrap the percentiles. not necessary, but try to do it as a function. 
++ cohort comparison
+
+
+**Total sampled area**
+I did some rough area calculations in google earth based on previous sample maps. 
+Sample maps can be found in the powerpoint "Sampling maps w stations for first SK grant 2016"
+Shinnecock: 1.61 KM
+Moriches: 1.49 KM
+Jamaica Bay: 2.24 KM
+Napeague Harbor: 1.98 KM
+Cold Spring Pond: 0.52 KM
+
+**I think I need to measure these for real somehow to determine which bay is the most productive per unit area**
+https://jamesepaterson.github.io/jamespatersonblog/03_trackingworkshop_homeranges
+we could do this by calculating minimum convex polygons but we'd have to fix lyndie's data for Cold Spring pond first. 
+We should do this in a different R script.
+
+
+```{r, echo=FALSE, warning=FALSE}
+#keeping everything in this folder
+setwd("/Users//tdolan/Documents//R-Github//WFFieldSurveyPaper")
+
+library("tidyr")
+library("ggplot2")
+library("plyr")
+library("purrr")
+library("dplyr")
+```
+
+**My Data**
+```{r}
+#somedata3<-read.csv("somedata3_Mar-4-2020.csv", na.strings="", header=TRUE) %>% filter(!is.na(Temp))
+somedata3 <-read.csv("skcompiled4gams2.csv", na.strings="", header=TRUE) 
+```
+
+##**Calculate CDFS for available vs. occupied habitat**##  
+Separately for each bay-YEAR
+```{r, include=TRUE, echo=TRUE}
+SomeData <-somedata3 %>% dplyr::select(-minl, -maxl, -sdl, -distswept, -Tow, -Towindex) %>% mutate(Pres =ifelse(cpT > 0,1,0))%>%
+  unite(BayYear,Bay,Year, remove=FALSE)%>% base::split(list(.$Bay,.$Year))
+Bay <-SomeData$Shinnecock.2010 # Just change out the bay and Year you are looking at.
+
+total.area <- 1.61*1000 #for Shinnecock
+       #   <- 1.49*1000 #for Moriches
+       #   <- 2.24*1000 #for Jamaica
+       #   <- 1.98*1000 #for Napeague
+       #   <- 0.52*1000 #for Cold Spring Pond
+```
+
+
+To save space, we're going to make it so that you have to just change out the Year and the Bay you are working with. 
+**FUNCTIONALIZE TEMPERATURE**
+```{r,fig.align='center', echo=TRUE}
+Bay <-SomeData$Shinnecock.2010 # Just change out the bay and Year you are looking at.
+
+total.area <- 1.61*1000 #for Shinnecock
+       #   <- 1.49*1000 #for Moriches
+       #   <- 2.24*1000 #for Jamaica
+       #   <- 1.98*1000 #for Napeague
+       #   <- 0.52*1000 #for Cold Spring Pond
+
+cdf.generator <-function(Bay, total.area){
+
+sometemp <-filter(Bay,!is.na(Temp)) %>% arrange(Temp) #arrange in order of temperature.
+#CALCULATIONS BY STRATA
+dat.eq1 <-ddply(sometemp, ~Year, summarize, Wh=(sum(area)/total.area), nh=n_distinct(X), yh=sum(cpT), ybar_strata=mean(cpT)) 
+dat.eq1 <-mutate(dat.eq1, Prop=Wh/nh) #column for Wh/nh for each year... so each year gets a value. 
+sometemp <-left_join(sometemp, dat.eq1) #join strata to tow-wise dataset. 
+#Available habitat; Equation 1.
+sometemp <-mutate(sometemp, SurveyBT = Temp*Prop) %>% mutate(SurveyCDF = cumsum(SurveyBT))
+SUMBT<-sum(sometemp$SurveyBT)
+sometemp <- mutate(sometemp, SurveyCDFFinal=SurveyCDF/SUMBT)  
+#Occupied habitat
+ybar_strata <- mean(sometemp$ybar_strata)
+sometemp <-mutate(sometemp, OccupiedBT =Prop*(cpT/ybar_strata)*as.numeric(Pres)*Temp)%>% mutate(OccupiedCDF =cumsum(OccupiedBT))
+SUMOccBT <-sum(sometemp$OccupiedBT)
+sometemp <-mutate(sometemp, OccCDF_final = OccupiedCDF/SUMOccBT)
+}
+
+#this could be cleaned up with map2
+shintemp10 <-cdf.generator(SomeData$Shinnecock.2010, 1610)
+shintemp11 <-cdf.generator(SomeData$Shinnecock.2011, 1610)
+shintemp16 <-cdf.generator(SomeData$Shinnecock.2016, 1610)
+shintemp17 <-cdf.generator(SomeData$Shinnecock.2017, 1610)
+
+jamtemp10 <-cdf.generator(SomeData$Jamaica.2010, 2240)
+jamtemp11 <-cdf.generator(SomeData$Jamaica.2011, 2240)
+jamtemp16 <-cdf.generator(SomeData$Jamaica.2016, 2240)
+
+Naptemp10 <-cdf.generator(SomeData$Napeague.2010, 1980)
+Naptemp16 <-cdf.generator(SomeData$Napeague.2016, 1980)
+
+Mortemp10 <-cdf.generator(SomeData$Moriches.2010, 1490)
+Mortemp11 <-cdf.generator(SomeData$Moriches.2011, 1490)
+Mortemp16 <-cdf.generator(SomeData$Moriches.2016, 1490)
+
+BY.temp.all <-bind_rows(shintemp10,shintemp11,shintemp16,shintemp17,jamtemp10,jamtemp11,jamtemp16,Naptemp10,Naptemp16,Mortemp10,Mortemp11,Mortemp16)
+
+#plot occupied habitat for all bays and years. 
+drabcolors <-c("#d0d1e6","#a6bddb", "#67a9cf", "#1c9099", "#016450")
+
+library("ggthemes")
+a <-  ggplot(BY.temp.all, aes(x=Temp, y=OccCDF_final, color=Bay))
+a+geom_line(size=1.5)+
+  scale_fill_manual(values=drabcolors)+scale_color_manual(values=drabcolors)+
+  facet_grid(Bay~Year)+
+  ylab("CDF")+xlab("Temperature (C)")+ggtitle("Occupied Thermal Habitat")+
+  #geom_rangeframe() +
+  theme_few(base_family="serif")
+#ggsave("bayearCDFs_Temperature.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+#occupied vs available in each 
+a <-  ggplot(BY.temp.all, aes(x=Temp, y=OccCDF_final))
+a+geom_line( color="black")+
+  geom_line(aes(x=Temp, y=SurveyCDFFinal), linetype="dotted")+  #dashed is available
+  facet_grid(Bay~Year)+
+  ylab("CDF")+xlab("Temperature (C)")+ggtitle("")+
+  theme_few(base_family="serif")
+#ggsave("bayyearcdfs_OccvAVTemp.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+#occupied vs available in each 
+BY.temp.all <-mutate(BY.temp.all, Year=as.factor(Year))
+a <-  ggplot(BY.temp.all, aes(x=Temp, y=OccCDF_final, color=Year))
+a+geom_line()+
+  scale_fill_manual(values=drabcolors)+scale_color_manual(values=drabcolors)+
+  geom_line(aes(x=Temp, y=SurveyCDFFinal), linetype="dotted")+  #dashed is available
+  facet_wrap(~Bay)+
+  ylab("CDF")+xlab("Temperature (C)")+ggtitle("")+
+  theme_few(base_family="serif")
+#ggsave("bayyearcdfs_OccvAVTEMP2_byBay.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+```
+
+**Compare occupied vs. available habitat for each one**
+```{r}
+#function for the test statistic.
+dist.test <-function(df){
+  ocdf1 <-df$OccCDF_final
+  ocdf2 <-df$SurveyCDFFinal
+Dist_test<-abs(ocdf1-ocdf2)
+Test.statistic<-max(Dist_test)
+Test.statistic}
+
+#Remember to change out the bay and silence the years you are not using. 
+#Test.statistic_S10 <-dist.test(shintemp10$OccCDF_final, shintemp10$SurveyCDFFinal)
+
+split.ts <-BY.temp.all %>% base::split(.$BayYear) %>% map_dfr(dist.test)
+```
+
+**Functionalize the habitat comparison**
+```{r}
+my.max <- function(x) ifelse( !all(is.na(x)), max(x, na.rm=T), NA)
+
+boot.sample <- function(x) {
+  repeat {
+    # do something
+    BootSampler <- sample(x, length(x),replace=FALSE)
+    x <- sum(BootSampler)
+    # exit if the condition is met
+    if (x > 0) break
+  }
+  return(BootSampler)
+}
+
+
+OcAv <-function(df){
+
+#BOOTSTRAPPING TEST STATISTIC AND CONFIDENCE INTERVALS
+catch <-df$cpT 
+ybar <-mean(catch)
+Pres <-df$Pres 
+Temp <-df$Temp 
+
+#Remember to change out the bay and silence the years you are not using. 
+Test.statistic_df <-dist.test(df)
+
+# THE BOOT LOOP - remember to silence the years you are not comparing
+set.seed(1234)
+results_df<-c()
+boot.store <-vector("list",length(10000))
+boot.av <-vector("list",length(10000))
+
+#turn warnings off for the bootstrap
+suppressWarnings(
+for(i in 1:10000) {  
+  #occupied
+  BootSampler<-sample(catch, length(catch),replace=FALSE) #normal way. turn off for now. 
+  #boot.sample(catch)
+  TempBoot<-(BootSampler/ybar)*(as.numeric(Pres))*Temp
+  CDFBoot<-cumsum(TempBoot)
+  SUMBoot<-sum(TempBoot)
+  CDFFinalBoot<-CDFBoot/SUMBoot
+  boot.store[[i]]<-CDFFinalBoot
+  #available
+  avBoot.sample <-sample(Temp,length(Temp),replace=FALSE)#all "available" habitat, just resampling temperature? 
+  BTavBoot<-(avBoot.sample)
+  avCDFBoot<-cumsum(BTavBoot)
+  avSUMBoot<-sum(BTavBoot)
+  avCDFFinalBoot<-avCDFBoot/avSUMBoot
+  boot.av[[i]]<-avCDFFinalBoot
+  DistBoot<-abs(CDFFinalBoot-avCDFFinalBoot) #absolute value from bootstrapped and observed
+  results_df[i]<-max(DistBoot) 
+  }
+)
+summary(results_df)
+results_df
+sum(abs(na.omit(results_df)>abs(Test.statistic_df))/length(na.omit(results_df))) 
+#sum(abs(results_df>abs(Test.statistic_df)))/10000
+}
+```
+
+**Use the temperature OcAV function**
+```{r}
+#OcAv(jamtemp10) #individually
+
+split.OcAv <-BY.temp.all %>% base::split(.$BayYear) %>% map_dfr(OcAv) #map it
+split.OcAv
+```
+produces NA in some circumstances unfortunately. The reason it produces NA is because in very zero inflated data and it is possible to draw entirely zeros in the resampling which would create a dividing by zero situation. There are several ways you could handle this. One answer is to exclude NAN from the results_df and then in the test statistic divide by the number of non-NAN trials. However, we are not going to do that. Instead we created a function that keeps sampling until a draw of non-zeros is created. The problem is that it only works below and doesn't work when you insert it into the function. So w/e for now. Idk. I give up. and IDK where they're coming from but I give up. We're just going to go back to the version where we divide by the number of NON-NA loops. 
+
+**Pairwise comparisons between years within a bay within the loop**
+Try first with the comparison between years within Shinnecock Bay. 
+We can do the rest of the bays later, but it might get to be too much. 
+There definitely is a way to turn this entire thing into a function and map apply it but we will get to that later. 
+
+#Alter the code for each bay you are doing this in.#
+```{r}
+#function for the test statistic.
+dist.test <-function(ocdf1,ocdf2){
+ #   ocdf1 <-ocdf1[ocdf1 > 0 & ocdf1 < 1]
+  #  ocdf2 <-ocdf2[ocdf2 > 0 & ocdf2 < 1]
+  if (length(ocdf1) > length(ocdf2)){
+    maxlength <- length(ocdf2)
+    ocdf1 <-ocdf1[1:maxlength]
+  } else if(length(ocdf2) > length(ocdf1)){
+    maxlength <- length(ocdf1)
+    ocdf2 <-ocdf2[1:maxlength]}
+Dist_test<-abs(ocdf1-ocdf2)
+Test.statistic<-my.max(Dist_test)
+Test.statistic}
+
+#Remember to change out the bay and silence the years you are not using. 
+Test.statistic_10v11 <-dist.test(shintemp10$OccCDF_final, shintemp11$OccCDF_final)
+Test.statistic_10v16 <-dist.test(shintemp10$OccCDF_final, shintemp16$OccCDF_final)
+Test.statistic_10v17 <-dist.test(shintemp10$OccCDF_final, shintemp17$OccCDF_final)
+Test.statistic_11v16 <-dist.test(shintemp11$OccCDF_final, shintemp16$OccCDF_final)
+Test.statistic_11v17 <-dist.test(shintemp11$OccCDF_final, shintemp17$OccCDF_final)
+Test.statistic_16v17 <-dist.test(shintemp16$OccCDF_final, shintemp17$OccCDF_final)
+
+tsv <-c(Test.statistic_10v11, Test.statistic_10v16, Test.statistic_10v17, Test.statistic_11v16, Test.statistic_11v17, Test.statistic_16v17)
+
+#aliasing - this would be key when we map apply but for now, this way
+catch2010 <-shintemp10$cpT ; catch2011 <- shintemp11$cpT ; 
+catch2016 <-shintemp16$cpT ; catch2017 <-shintemp17$cpT
+Pres2010  <-shintemp10$Pres ; Pres2011 <- shintemp11$Pres ; 
+Pres2016 <-shintemp16$Pres ; Pres2017 <-shintemp17$Pres
+ybar2010 <-mean(catch2010) ; ybar2011 <-mean(catch2011) ; 
+ybar2016 <-mean(catch2016) ; ybar2017 <-mean(catch2017)
+Temp2010 <-shintemp10$Temp ; Temp2011 <- shintemp11$Temp ; 
+Temp2016 <-shintemp16$Temp ;Temp2017 <-shintemp17$Temp
+
+
+# THE BOOT LOOP - remember to silence the years you are not comparing
+set.seed(1234)
+results_10v11<-c()
+results_10v16<-c()
+results_10v17<-c()
+results_11v16<-c()
+results_11v17<-c()
+results_16v17<-c()
+boot.store2010 <-vector("list",length(10000))
+boot.store2011 <-vector("list",length(10000))
+boot.store2016 <-vector("list",length(10000))
+boot.store2017 <-vector("list",length(10000))
+
+#turn warnings off for the bootstrap
+#suppressWarnings(
+for(i in 1:10000) {  
+  #####2010#####
+  BootSampler2010<-sample(catch2010, length(catch2010),replace=FALSE)  
+  TempBoot2010<-(BootSampler2010/ybar2010)*(as.numeric(Pres2010))*Temp2010 
+  CDFBoot2010<-cumsum(TempBoot2010)
+  SUMBoot2010<-sum(TempBoot2010)
+  CDFFinalBoot2010<-CDFBoot2010/SUMBoot2010
+  boot.store2010[[i]]<-CDFFinalBoot2010
+  #####2011####
+  BootSampler2011<-sample(catch2011, length(catch2011),replace=FALSE) 
+ TempBoot2011<-(BootSampler2011/ybar2011)*(as.numeric(Pres2011))*Temp2011 
+  CDFBoot2011<-cumsum(TempBoot2011)
+  SUMBoot2011<-sum(TempBoot2011)
+  CDFFinalBoot2011<-CDFBoot2011/SUMBoot2011
+  boot.store2011[[i]]<-CDFFinalBoot2011
+  #####2016######
+  BootSampler2016<-sample(catch2016, length(catch2016),replace=FALSE)  
+  TempBoot2016<-(BootSampler2016/ybar2016)*(as.numeric(Pres2016))*Temp2016 
+  CDFBoot2016<-cumsum(TempBoot2016)
+  SUMBoot2016<-sum(TempBoot2016)
+  CDFFinalBoot2016<-CDFBoot2016/SUMBoot2016
+  boot.store2016[[i]]<-CDFFinalBoot2016
+  #####2017#####
+  BootSampler2017<-sample(catch2017, length(catch2017),replace=FALSE)  
+  TempBoot2017<-(BootSampler2017/ybar2017)*(as.numeric(Pres2017))*Temp2017 
+  CDFBoot2017<-cumsum(TempBoot2017)
+  SUMBoot2017<-sum(TempBoot2017)
+  CDFFinalBoot2017<-CDFBoot2017/SUMBoot2017
+  boot.store2017[[i]]<-CDFFinalBoot2017
+  #####Test statistic For each pairwise comparison###
+  results_10v11[i]<-dist.test(CDFFinalBoot2010, CDFFinalBoot2011)
+  results_10v16[i]<-dist.test(CDFFinalBoot2010, CDFFinalBoot2016)
+  results_10v17[i]<-dist.test(CDFFinalBoot2010, CDFFinalBoot2017)
+  results_11v16[i]<-dist.test(CDFFinalBoot2011, CDFFinalBoot2016)
+  results_11v17[i]<-dist.test(CDFFinalBoot2011, CDFFinalBoot2017)
+  results_16v17[i]<-dist.test(CDFFinalBoot2016, CDFFinalBoot2017)
+  }
+
+#turn warnings back on
+#)
+
+#SIGNIFICANCE TEST RESULT
+## See how many of the values in 'result'are shine extreme than the observed value
+v10v11 <-sum(abs(na.omit(results_10v11)>abs(Test.statistic_10v11))/length(na.omit(results_10v11))) 
+v10v16 <-sum(abs(na.omit(results_10v16)>abs(Test.statistic_10v16))/length(na.omit(results_10v16)))
+v10v17 <-sum(abs(na.omit(results_10v17)>abs(Test.statistic_10v17))/length(na.omit(results_10v17)))
+v11v16 <-sum(abs(na.omit(results_11v16)>abs(Test.statistic_11v16))/length(na.omit(results_11v16)))
+v11v17 <-sum(abs(na.omit(results_11v17)>abs(Test.statistic_11v17))/length(na.omit(results_11v17)))
+v16v17 <-sum(abs(na.omit(results_16v17)>abs(Test.statistic_16v17))/length(na.omit(results_16v17)))
+
+test.results.T <- c(v10v11,v10v16,v10v17,v11v16,v11v17,v16v17) 
+```
+
+
+The next step is to set this up for between bay within a year comparisons. 
+**Bay within a year comparisons**
+```{r}
+#Remember to change out the year and silence the bays you are not using. 
+Test.statistic_JvM <-dist.test(jamtemp16$OccCDF_final, Mortemp16$OccCDF_final)
+Test.statistic_JvN <-dist.test(jamtemp16$OccCDF_final, Naptemp16$OccCDF_final)
+Test.statistic_JvS <-dist.test(jamtemp16$OccCDF_final, shintemp16$OccCDF_final)
+Test.statistic_MvN <-dist.test(Mortemp16$OccCDF_final, Naptemp16$OccCDF_final)
+Test.statistic_MvS <-dist.test(Mortemp16$OccCDF_final, shintemp16$OccCDF_final)
+Test.statistic_NvS <-dist.test(Naptemp16$OccCDF_final, shintemp16$OccCDF_final)
+
+# THE BOOT LOOP - remember to silence the years you are not comparing
+set.seed(1234)
+results_JvM<-c()
+results_JvN<-c()
+results_JvS<-c()
+results_MvN<-c()
+results_MvS<-c()
+results_NvS<-c()
+boot.storeJam <-vector("list",length(10000))
+boot.storeMor <-vector("list",length(10000))
+boot.storeNap <-vector("list",length(10000))
+boot.storeShin <-vector("list",length(10000))
+
+#turn warnings off for the bootstrap
+#suppressWarnings(
+for(i in 1:10000) {  
+  #####Jam#####
+  BootSamplerJam<-sample(jamtemp16$cpT, length(jamtemp16$cpT),replace=FALSE)  
+  TempBootJam<-(BootSamplerJam/mean(jamtemp16$cpT))*(as.numeric(jamtemp16$Pres))*jamtemp16$Temp
+  CDFBootJam<-cumsum(TempBootJam)
+  SUMBootJam<-sum(TempBootJam)
+  CDFFinalBootJam<-CDFBootJam/SUMBootJam
+  boot.storeJam[[i]]<-CDFFinalBootJam
+  #####Mor####
+  BootSamplerMor<-sample(Mortemp16$cpT, length(Mortemp16$cpT),replace=FALSE) 
+ TempBootMor<-(BootSamplerMor/mean(Mortemp16$cpT))*(as.numeric(Mortemp16$Pres))*Mortemp16$Temp 
+  CDFBootMor<-cumsum(TempBootMor)
+  SUMBootMor<-sum(TempBootMor)
+  CDFFinalBootMor<-CDFBootMor/SUMBootMor
+  boot.storeMor[[i]]<-CDFFinalBootMor
+  #####Nap######
+  BootSamplerNap<-sample(Naptemp16$cpT, length(Naptemp16$cpT),replace=FALSE)  
+  TempBootNap<-(BootSamplerNap/mean(Naptemp16$cpT))*(as.numeric(Naptemp16$Pres))*Naptemp16$Temp
+  CDFBootNap<-cumsum(TempBootNap)
+  SUMBootNap<-sum(TempBootNap)
+  CDFFinalBootNap<-CDFBootNap/SUMBootNap
+  boot.storeNap[[i]]<-CDFFinalBootNap
+  #####Shin#####
+  BootSamplerShin<-sample(shintemp16$cpT, length(shintemp16$cpT),replace=FALSE)  
+  TempBootShin<-(BootSamplerShin/mean(shintemp16$cpT))*(as.numeric(shintemp16$Pres))*shintemp16$Temp
+  CDFBootShin<-cumsum(TempBootShin)
+  SUMBootShin<-sum(TempBootShin)
+  CDFFinalBootShin<-CDFBootShin/SUMBootShin
+  boot.storeShin[[i]]<-CDFFinalBootShin
+  #####Test statistic For each pairwise comparison###
+results_JvM[i]<-dist.test(CDFFinalBootJam, CDFFinalBootMor)
+results_JvN[i]<-dist.test(CDFFinalBootJam, CDFFinalBootNap)
+results_JvS[i]<-dist.test(CDFFinalBootJam, CDFFinalBootShin)
+results_MvN[i]<-dist.test(CDFFinalBootMor, CDFFinalBootNap)
+results_MvS[i]<-dist.test(CDFFinalBootMor, CDFFinalBootShin)
+results_NvS[i]<-dist.test(CDFFinalBootNap, CDFFinalBootShin)
+  }
+
+#turn warnings back on
+#)
+
+#SIGNIFICANCE TEST RESULT
+## See how many of the values in 'result'are shine extreme than the observed value
+#issues with NANs. 
+vJvM <-sum(abs(na.omit(results_JvM)>abs(Test.statistic_JvM))/length(na.omit(results_JvM))) 
+vJvN <-sum(abs(na.omit(results_JvN)>abs(Test.statistic_JvN))/length(na.omit(results_JvN)))
+vJvS <-sum(abs(na.omit(results_JvS)>abs(Test.statistic_JvS))/length(na.omit(results_JvS)))
+vMvN <-sum(abs(na.omit(results_MvN)>abs(Test.statistic_MvN))/length(na.omit(results_MvN)))
+vMvS <-sum(abs(na.omit(results_MvS)>abs(Test.statistic_MvS))/length(na.omit(results_MvS)))
+vNvS <-sum(abs(na.omit(results_NvS)>abs(Test.statistic_NvS))/length(na.omit(results_NvS)))
+
+test.results.B <- c(vJvM,vJvN, vJvS, vMvN, vMvS, vNvS) 
+test.results.B
+```
+
+ I am not going to plot the CI for now because i think it will just be like too much. 
+but maybe we want to extract the percentiles. and then take a mean, instead of the stratified against years buisiness like we previously did. 
+
+
+**Percentiles** 
+*For settlement, say the 50th percentile occured on date x. or the 95th occured by date.* 
+calculate percentiles - i don't know what for.      
+  + If numeric(0) is result, we need to interpolate; the exact match (0.05, 0.5, 0.95) does not exist    
+  + below we interpolate the data and use our CDF to predict the values at 0.05, 0.5, and 0.95    
+  + if interpolation of n=10000 still produces numeric(0), use a higher number (20000,etc.)    
+  + going to use 1st estimate for each percentile    
+```{r, warning=FALSE, echo=TRUE}
+#Calculating Quantiles
+
+#FUNCTION TO EXTRACT PERCENTILES OF OCCUPIED HABITAT
+percentile.func <-function(df){
+df <- mutate(df, BTcolumn=round(Temp,digits=1),OccCDFcolumn=round(OccCDF_final,digits=2)) 
+  
+OccPer.5 <-(df[df$OccCDFcolumn=='0.05','BTcolumn']) #not interpolated version 
+OccPer.50 <-(df[df$OccCDFcolumn=='0.5','BTcolumn'])
+OccPer.95 <-(df[df$OccCDFcolumn=='0.95','BTcolumn'])
+not.interpolated <-list(OccPer.5,OccPer.50,OccPer.95)
+  #occ.ni <- rapply(not.interpolated, mean)
+#interpolated version 
+TabSurveyApprox<-approx(df$BTcolumn,df$OccCDFcolumn, n=20000)  
+TabSurveyApproxBT<-round(TabSurveyApprox$x,digits=3)        
+TabSurveyApproxSurveyOccCDF<-round(TabSurveyApprox$y,digits=3)   
+OccTabSurveyAp<-data.frame(cbind(TabSurveyApproxBT,TabSurveyApproxSurveyOccCDF))   
+OccPer.5.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.05','TabSurveyApproxBT'])  #(INTERPOLATED)
+OccPer.50.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.5','TabSurveyApproxBT'])
+OccPer.95.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.95','TabSurveyApproxBT'])
+interpolated <-list(OccPer.5.ap,OccPer.50.ap,OccPer.95.ap)
+occ.i <-rapply(interpolated, mean)
+#out <-list(not.interpolated, occ.i)
+occ.i
+}
+```
+
+**Apply percentile function**
+```{r}
+split.percent <-BY.temp.all %>% base::split(.$BayYear) %>% map_dfr(percentile.func) #map it
+split.percent
+```
+
+
+### **DISSOLVED OXYGEN** #####
+
+```{r,fig.align='center', echo=TRUE}
+cdf.generator <-function(Bay, total.area){
+
+someDO <-filter(Bay,!is.na(DO.mg.L) & DO.mg.L > 0 & DO.mg.L <20) %>% arrange(DO.mg.L) #arrange in order of DOerature.
+#CALCULATIONS BY STRATA
+dat.eq1 <-ddply(someDO, ~Year, summarize, Wh=(sum(area)/total.area), nh=n_distinct(X), yh=sum(cpT), ybar_strata=mean(cpT)) 
+dat.eq1 <-mutate(dat.eq1, Prop=Wh/nh) #column for Wh/nh for each year... so each year gets a value. 
+someDO <-left_join(someDO, dat.eq1) #join strata to tow-wise dataset. 
+#Available habitat; Equation 1.
+someDO <-mutate(someDO, SurveyBT = DO.mg.L*Prop) %>% mutate(SurveyCDF = cumsum(SurveyBT))
+SUMBT<-sum(someDO$SurveyBT)
+someDO <- mutate(someDO, SurveyCDFFinal=SurveyCDF/SUMBT)  
+#Occupied habitat
+ybar_strata <- mean(someDO$ybar_strata)
+someDO <-mutate(someDO, OccupiedBT =Prop*(cpT/ybar_strata)*as.numeric(Pres)*DO.mg.L)%>% mutate(OccupiedCDF =cumsum(OccupiedBT))
+SUMOccBT <-sum(someDO$OccupiedBT)
+someDO <-mutate(someDO, OccCDF_final = OccupiedCDF/SUMOccBT)
+}
+
+#this could be cleaned up with map2
+shinDO10 <-cdf.generator(SomeData$Shinnecock.2010, 1610)
+shinDO11 <-cdf.generator(SomeData$Shinnecock.2011, 1610)
+shinDO16 <-cdf.generator(SomeData$Shinnecock.2016, 1610)
+shinDO17 <-cdf.generator(SomeData$Shinnecock.2017, 1610)
+
+jamDO10 <-cdf.generator(SomeData$Jamaica.2010, 2240)
+jamDO11 <-cdf.generator(SomeData$Jamaica.2011, 2240)
+jamDO16 <-cdf.generator(SomeData$Jamaica.2016, 2240)
+
+NapDO10 <-cdf.generator(SomeData$Napeague.2010, 1980)
+NapDO16 <-cdf.generator(SomeData$Napeague.2016, 1980)
+
+MorDO10 <-cdf.generator(SomeData$Moriches.2010, 1490)
+MorDO11 <-cdf.generator(SomeData$Moriches.2011, 1490)
+MorDO16 <-cdf.generator(SomeData$Moriches.2016, 1490)
+
+BY.DO.all <-bind_rows(shinDO10,shinDO11,shinDO16,shinDO17,jamDO10,jamDO11,jamDO16,NapDO10,NapDO16,MorDO10,MorDO11,MorDO16)
+
+#plot occupied habitat for all bays and years. 
+drabcolors <-c("#d0d1e6","#a6bddb", "#67a9cf", "#1c9099", "#016450")
+
+library("ggthemes")
+a <-  ggplot(BY.DO.all, aes(x=DO.mg.L, y=OccCDF_final, color=Bay))
+a+geom_line(size=1.5)+
+  scale_fill_manual(values=drabcolors)+scale_color_manual(values=drabcolors)+
+  facet_grid(Bay~Year)+
+  ylab("CDF")+xlab("Dissolved Oxygen (mg/L)")+ggtitle("")+
+  #geom_rangeframe() +
+  theme_few(base_family="serif")
+#ggsave("bayearCDFs_DO.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+#occupied vs available in each 
+a <-  ggplot(BY.DO.all, aes(x=DO.mg.L, y=OccCDF_final))
+a+geom_line( color="black")+
+  geom_line(aes(x=DO.mg.L, y=SurveyCDFFinal), linetype="dotted")+  #dashed is available
+  facet_grid(Bay~Year)+
+  ylab("CDF")+xlab("Dissolved Oxygen (mg/L)")+ggtitle("")+
+  theme_few(base_family="serif")
+#ggsave("bayyearcdfs_OccvAVDO.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+#occupied vs available in each 
+BY.DO.all <-mutate(BY.DO.all, Year=as.factor(Year))
+a <-  ggplot(BY.DO.all, aes(x=DO.mg.L, y=OccCDF_final, color=Year))
+a+geom_line()+
+  scale_fill_manual(values=drabcolors)+scale_color_manual(values=drabcolors)+
+  geom_line(aes(x=DO.mg.L, y=SurveyCDFFinal), linetype="dotted")+  #dashed is available
+  facet_wrap(~Bay)+
+  ylab("CDF")+xlab("Dissolved Oxygen (mg/L)")+ggtitle("")+
+  theme_few(base_family="serif")
+#ggsave("bayyearcdfs_OccvAVDO_byBay.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+```
+
+**DISSOLVED OXYGEN: Compare occupied vs. available habitat for each one**
+```{r}
+#function for the test statistic.
+dist.test <-function(df){
+  ocdf1 <-df$OccCDF_final
+  ocdf2 <-df$SurveyCDFFinal
+Dist_test<-abs(ocdf1-ocdf2)
+Test.statistic<-max(Dist_test)
+Test.statistic}
+
+#Remember to change out the bay and silence the years you are not using. 
+#Test.statistic_S10 <-dist.test(shintemp10$OccCDF_final, shintemp10$SurveyCDFFinal)
+
+split.ts <-BY.DO.all %>% base::split(.$BayYear) %>% map_dfr(dist.test)
+```
+
+
+**DISSOLVED OXYGEN: Functionalize the habitat comparison**
+```{r}
+my.max <- function(x) ifelse( !all(is.na(x)), max(x, na.rm=T), NA)
+
+boot.sample <- function(x) {
+  repeat {
+    # do something
+    BootSampler <- sample(x, length(x),replace=FALSE)
+    x <- sum(BootSampler)
+    # exit if the condition is met
+    if (x > 0) break
+  }
+  return(BootSampler)
+}
+OcAv <-function(df){
+
+#BOOTSTRAPPING TEST STATISTIC AND CONFIDENCE INTERVALS
+catch <-df$cpT 
+ybar <-mean(catch)
+Pres <-df$Pres 
+DO <-df$DO.mg.L 
+
+#Remember to change out the bay and silence the years you are not using. 
+Test.statistic_df <-dist.test(df)
+
+# THE BOOT LOOP - remember to silence the years you are not comparing
+set.seed(1234)
+results_df<-c()
+boot.store <-vector("list",length(10000))
+boot.av <-vector("list",length(10000))
+
+#turn warnings off for the bootstrap
+suppressWarnings(
+for(i in 1:10000) {  
+  #occupied
+  BootSampler<-sample(catch, length(catch),replace=FALSE) #normal way. turn off for now. 
+  #boot.sample(catch)
+  DOBoot<-(BootSampler/ybar)*(as.numeric(Pres))*DO
+  CDFBoot<-cumsum(DOBoot)
+  SUMBoot<-sum(DOBoot)
+  CDFFinalBoot<-CDFBoot/SUMBoot
+  boot.store[[i]]<-CDFFinalBoot
+  #available
+  avBoot.sample <-sample(DO,length(DO),replace=FALSE)#all "available" habitat, just resampling DOerature? 
+  BTavBoot<-(avBoot.sample)
+  avCDFBoot<-cumsum(BTavBoot)
+  avSUMBoot<-sum(BTavBoot)
+  avCDFFinalBoot<-avCDFBoot/avSUMBoot
+  boot.av[[i]]<-avCDFFinalBoot
+  DistBoot<-abs(CDFFinalBoot-avCDFFinalBoot) #absolute value from bootstrapped and observed
+  results_df[i]<-max(DistBoot) 
+  }
+)
+summary(results_df)
+results_df
+sum(abs(na.omit(results_df)>abs(Test.statistic_df))/length(na.omit(results_df))) 
+#sum(abs(results_df>abs(Test.statistic_df)))/10000
+}
+```
+
+**Use the DO OcAV function**
+```{r}
+split.OcAv <-BY.DO.all %>% base::split(.$BayYear) %>% map_dfr(OcAv) #map it
+split.OcAv
+```
+
+
+**DISSOLVED OXYGEN year within a bay**
+#Alter the code for each bay you are doing this in.#
+```{r}
+#function for the test statistic.
+dist.test <-function(ocdf1,ocdf2){
+ #   ocdf1 <-ocdf1[ocdf1 > 0 & ocdf1 < 1]
+  #  ocdf2 <-ocdf2[ocdf2 > 0 & ocdf2 < 1]
+  if (length(ocdf1) > length(ocdf2)){
+    maxlength <- length(ocdf2)
+    ocdf1 <-ocdf1[1:maxlength]
+  } else if(length(ocdf2) > length(ocdf1)){
+    maxlength <- length(ocdf1)
+    ocdf2 <-ocdf2[1:maxlength]}
+Dist_test<-abs(ocdf1-ocdf2)
+Test.statistic<-my.max(Dist_test)
+Test.statistic}
+
+#Remember to change out the bay and silence the years you are not using. 
+Test.statistic_10v11 <-dist.test(shinDO10$OccCDF_final, shinDO11$OccCDF_final)
+Test.statistic_10v16 <-dist.test(shinDO10$OccCDF_final, shinDO16$OccCDF_final)
+Test.statistic_10v17 <-dist.test(shinDO10$OccCDF_final, shinDO17$OccCDF_final)
+Test.statistic_11v16 <-dist.test(shinDO11$OccCDF_final, shinDO16$OccCDF_final)
+Test.statistic_11v17 <-dist.test(shinDO11$OccCDF_final, shinDO17$OccCDF_final)
+Test.statistic_16v17 <-dist.test(shinDO16$OccCDF_final, shinDO17$OccCDF_final)
+
+tsv <-c(Test.statistic_10v11, Test.statistic_10v16, Test.statistic_10v17, Test.statistic_11v16, Test.statistic_11v17, Test.statistic_16v17)
+
+#aliasing - this would be key when we map apply but for now, this way
+catch2010 <-shinDO10$cpT ; catch2011 <- shinDO11$cpT ; 
+catch2016 <-shinDO16$cpT ; catch2017 <-shinDO17$cpT
+Pres2010  <-shinDO10$Pres ; Pres2011 <- shinDO11$Pres ; 
+Pres2016 <-shinDO16$Pres ; Pres2017 <-shinDO17$Pres
+ybar2010 <-mean(catch2010) ; ybar2011 <-mean(catch2011) ; 
+ybar2016 <-mean(catch2016) ; ybar2017 <-mean(catch2017)
+DO2010 <-shinDO10$DO.mg.L ; DO2011 <- shinDO11$DO.mg.L ; 
+DO2016 <-shinDO16$DO.mg.L ;DO2017 <-shinDO17$DO.mg.L
+
+
+# THE BOOT LOOP - remember to silence the years you are not comparing
+set.seed(1234)
+results_10v11<-c()
+results_10v16<-c()
+results_10v17<-c()
+results_11v16<-c()
+results_11v17<-c()
+results_16v17<-c()
+boot.store2010 <-vector("list",length(10000))
+boot.store2011 <-vector("list",length(10000))
+boot.store2016 <-vector("list",length(10000))
+boot.store2017 <-vector("list",length(10000))
+
+#turn warnings off for the bootstrap
+#suppressWarnings(
+for(i in 1:10000) {  
+  #####2010#####
+  BootSampler2010<-sample(catch2010, length(catch2010),replace=FALSE)  
+  DOBoot2010<-(BootSampler2010/ybar2010)*(as.numeric(Pres2010))*DO2010 
+  CDFBoot2010<-cumsum(DOBoot2010)
+  SUMBoot2010<-sum(DOBoot2010)
+  CDFFinalBoot2010<-CDFBoot2010/SUMBoot2010
+  boot.store2010[[i]]<-CDFFinalBoot2010
+  #####2011####
+  BootSampler2011<-sample(catch2011, length(catch2011),replace=FALSE) 
+  DOBoot2011<-(BootSampler2011/ybar2011)*(as.numeric(Pres2011))*DO2011 
+  CDFBoot2011<-cumsum(DOBoot2011)
+  SUMBoot2011<-sum(DOBoot2011)
+  CDFFinalBoot2011<-CDFBoot2011/SUMBoot2011
+  boot.store2011[[i]]<-CDFFinalBoot2011
+  #####2016######
+  BootSampler2016<-sample(catch2016, length(catch2016),replace=FALSE)  
+  DOBoot2016<-(BootSampler2016/ybar2016)*(as.numeric(Pres2016))*DO2016 
+  CDFBoot2016<-cumsum(DOBoot2016)
+  SUMBoot2016<-sum(DOBoot2016)
+  CDFFinalBoot2016<-CDFBoot2016/SUMBoot2016
+  boot.store2016[[i]]<-CDFFinalBoot2016
+  #####2017#####
+  BootSampler2017<-sample(catch2017, length(catch2017),replace=FALSE)  
+  DOBoot2017<-(BootSampler2017/ybar2017)*(as.numeric(Pres2017))*DO2017 
+  CDFBoot2017<-cumsum(DOBoot2017)
+  SUMBoot2017<-sum(DOBoot2017)
+  CDFFinalBoot2017<-CDFBoot2017/SUMBoot2017
+  boot.store2017[[i]]<-CDFFinalBoot2017
+  #####Test statistic For each pairwise comparison###
+  results_10v11[i]<-dist.test(CDFFinalBoot2010, CDFFinalBoot2011)
+  results_10v16[i]<-dist.test(CDFFinalBoot2010, CDFFinalBoot2016)
+  results_10v17[i]<-dist.test(CDFFinalBoot2010, CDFFinalBoot2017)
+  results_11v16[i]<-dist.test(CDFFinalBoot2011, CDFFinalBoot2016)
+  results_11v17[i]<-dist.test(CDFFinalBoot2011, CDFFinalBoot2017)
+  results_16v17[i]<-dist.test(CDFFinalBoot2016, CDFFinalBoot2017)
+  }
+
+#turn warnings back on
+#)
+
+#SIGNIFICANCE TEST RESULT
+## See how many of the values in 'result'are shine extreme than the observed value
+v10v11 <-sum(abs(na.omit(results_10v11)>abs(Test.statistic_10v11))/length(na.omit(results_10v11))) 
+v10v16 <-sum(abs(na.omit(results_10v16)>abs(Test.statistic_10v16))/length(na.omit(results_10v16)))
+v10v17 <-sum(abs(na.omit(results_10v17)>abs(Test.statistic_10v17))/length(na.omit(results_10v17)))
+v11v16 <-sum(abs(na.omit(results_11v16)>abs(Test.statistic_11v16))/length(na.omit(results_11v16)))
+v11v17 <-sum(abs(na.omit(results_11v17)>abs(Test.statistic_11v17))/length(na.omit(results_11v17)))
+v16v17 <-sum(abs(na.omit(results_16v17)>abs(Test.statistic_16v17))/length(na.omit(results_16v17)))
+
+test.results.T <- c(v10v11,v10v16,v10v17,v11v16,v11v17,v16v17) 
+```
+
+
+**Bay within a year comparisons**
+```{r}
+#Remember to change out the year and silence the bays you are not using. 
+Test.statistic_JvM <-dist.test(jamDO16$OccCDF_final, MorDO16$OccCDF_final)
+Test.statistic_JvN <-dist.test(jamDO16$OccCDF_final, NapDO16$OccCDF_final)
+Test.statistic_JvS <-dist.test(jamDO16$OccCDF_final, shinDO16$OccCDF_final)
+Test.statistic_MvN <-dist.test(MorDO16$OccCDF_final, NapDO16$OccCDF_final)
+Test.statistic_MvS <-dist.test(MorDO16$OccCDF_final, shinDO16$OccCDF_final)
+Test.statistic_NvS <-dist.test(NapDO16$OccCDF_final, shinDO16$OccCDF_final)
+
+test.stats.B <- c(Test.statistic_JvM,Test.statistic_JvN, Test.statistic_JvS, Test.statistic_MvN, Test.statistic_MvS, Test.statistic_NvS) 
+test.stats.B
+
+# THE BOOT LOOP - remember to silence the years you are not comparing
+set.seed(1234)
+results_JvM<-c()
+results_JvN<-c()
+results_JvS<-c()
+results_MvN<-c()
+results_MvS<-c()
+results_NvS<-c()
+boot.storeJam <-vector("list",length(10000))
+boot.storeMor <-vector("list",length(10000))
+boot.storeNap <-vector("list",length(10000))
+boot.storeShin <-vector("list",length(10000))
+
+#turn warnings off for the bootstrap
+#suppressWarnings(
+for(i in 1:10000) {  
+  #####Jam#####
+  BootSamplerJam<-sample(jamDO16$cpT, length(jamDO16$cpT),replace=FALSE)  
+  DOBootJam<-(BootSamplerJam/mean(jamDO16$cpT))*(as.numeric(jamDO16$Pres))*jamDO16$DO.mg.L
+  CDFBootJam<-cumsum(DOBootJam)
+  SUMBootJam<-sum(DOBootJam)
+  CDFFinalBootJam<-CDFBootJam/SUMBootJam
+  boot.storeJam[[i]]<-CDFFinalBootJam
+  #####Mor####
+  BootSamplerMor<-sample(MorDO16$cpT, length(MorDO16$cpT),replace=FALSE) 
+ DOBootMor<-(BootSamplerMor/mean(MorDO16$cpT))*(as.numeric(MorDO16$Pres))*MorDO16$DO.mg.L 
+  CDFBootMor<-cumsum(DOBootMor)
+  SUMBootMor<-sum(DOBootMor)
+  CDFFinalBootMor<-CDFBootMor/SUMBootMor
+  boot.storeMor[[i]]<-CDFFinalBootMor
+  #####Nap######
+  BootSamplerNap<-sample(NapDO16$cpT, length(NapDO16$cpT),replace=FALSE)  
+  DOBootNap<-(BootSamplerNap/mean(NapDO16$cpT))*(as.numeric(NapDO16$Pres))*NapDO16$DO.mg.L
+  CDFBootNap<-cumsum(DOBootNap)
+  SUMBootNap<-sum(DOBootNap)
+  CDFFinalBootNap<-CDFBootNap/SUMBootNap
+  boot.storeNap[[i]]<-CDFFinalBootNap
+  #####Shin#####
+  BootSamplerShin<-sample(shinDO16$cpT, length(shinDO16$cpT),replace=FALSE)  
+  DOBootShin<-(BootSamplerShin/mean(shinDO16$cpT))*(as.numeric(shinDO16$Pres))*shinDO16$DO.mg.L
+  CDFBootShin<-cumsum(DOBootShin)
+  SUMBootShin<-sum(DOBootShin)
+  CDFFinalBootShin<-CDFBootShin/SUMBootShin
+  boot.storeShin[[i]]<-CDFFinalBootShin
+  #####Test statistic For each pairwise comparison###
+results_JvM[i]<-dist.test(CDFFinalBootJam, CDFFinalBootMor)
+results_JvN[i]<-dist.test(CDFFinalBootJam, CDFFinalBootNap)
+results_JvS[i]<-dist.test(CDFFinalBootJam, CDFFinalBootShin)
+results_MvN[i]<-dist.test(CDFFinalBootMor, CDFFinalBootNap)
+results_MvS[i]<-dist.test(CDFFinalBootMor, CDFFinalBootShin)
+results_NvS[i]<-dist.test(CDFFinalBootNap, CDFFinalBootShin)
+  }
+
+#turn warnings back on
+#)
+
+#SIGNIFICANCE TEST RESULT
+## See how many of the values in 'result'are shine extreme than the observed value
+#issues with NANs. 
+vJvM <-sum(abs(na.omit(results_JvM)>abs(Test.statistic_JvM))/length(na.omit(results_JvM))) 
+vJvN <-sum(abs(na.omit(results_JvN)>abs(Test.statistic_JvN))/length(na.omit(results_JvN)))
+vJvS <-sum(abs(na.omit(results_JvS)>abs(Test.statistic_JvS))/length(na.omit(results_JvS)))
+vMvN <-sum(abs(na.omit(results_MvN)>abs(Test.statistic_MvN))/length(na.omit(results_MvN)))
+vMvS <-sum(abs(na.omit(results_MvS)>abs(Test.statistic_MvS))/length(na.omit(results_MvS)))
+vNvS <-sum(abs(na.omit(results_NvS)>abs(Test.statistic_NvS))/length(na.omit(results_NvS)))
+
+test.results.B <- c(vJvM,vJvN, vJvS, vMvN, vMvS, vNvS) 
+test.results.B
+```
+
+
+**DISSOLVED OXYGEN PERCENTILES**
+```{r, warning=FALSE, echo=TRUE}
+#Calculating Quantiles
+
+#FUNCTION TO EXTRACT PERCENTILES OF OCCUPIED HABITAT
+percentile.func <-function(df){
+df <- mutate(df, BTcolumn=round(DO.mg.L,digits=1),OccCDFcolumn=round(OccCDF_final,digits=2)) 
+  
+OccPer.5 <-(df[df$OccCDFcolumn=='0.05','BTcolumn']) #not interpolated version 
+OccPer.50 <-(df[df$OccCDFcolumn=='0.5','BTcolumn'])
+OccPer.95 <-(df[df$OccCDFcolumn=='0.95','BTcolumn'])
+not.interpolated <-list(OccPer.5,OccPer.50,OccPer.95)
+  #occ.ni <- rapply(not.interpolated, mean)
+#interpolated version 
+TabSurveyApprox<-approx(df$BTcolumn,df$OccCDFcolumn, n=20000)  
+TabSurveyApproxBT<-round(TabSurveyApprox$x,digits=3)        
+TabSurveyApproxSurveyOccCDF<-round(TabSurveyApprox$y,digits=3)   
+OccTabSurveyAp<-data.frame(cbind(TabSurveyApproxBT,TabSurveyApproxSurveyOccCDF))   
+OccPer.5.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.05','TabSurveyApproxBT'])  #(INTERPOLATED)
+OccPer.50.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.5','TabSurveyApproxBT'])
+OccPer.95.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.95','TabSurveyApproxBT'])
+interpolated <-list(OccPer.5.ap,OccPer.50.ap,OccPer.95.ap)
+occ.i <-rapply(interpolated, mean)
+#out <-list(not.interpolated, occ.i)
+occ.i
+}
+```
+
+**Apply percentile function**
+```{r}
+split.percent <-BY.DO.all %>% base::split(.$BayYear) %>% map_dfr(percentile.func) #map it
+split.percent
+```
+
+
+###### **SALINITY** ##########
+```{r,fig.align='center', echo=TRUE}
+cdf.generator <-function(Bay, total.area){
+
+someSAL <-filter(Bay,!is.na(SAL) & SAL > 0 & SAL <40) %>% arrange(SAL) #arrange in order of SALerature.
+#CALCULATIONS BY STRATA
+dat.eq1 <-ddply(someSAL, ~Year, summarize, Wh=(sum(area)/total.area), nh=n_distinct(X), yh=sum(cpT), ybar_strata=mean(cpT)) 
+dat.eq1 <-mutate(dat.eq1, Prop=Wh/nh) #column for Wh/nh for each year... so each year gets a value. 
+someSAL <-left_join(someSAL, dat.eq1) #join strata to tow-wise dataset. 
+#Available habitat; Equation 1.
+someSAL <-mutate(someSAL, SurveyBT = SAL*Prop) %>% mutate(SurveyCDF = cumsum(SurveyBT))
+SUMBT<-sum(someSAL$SurveyBT)
+someSAL <- mutate(someSAL, SurveyCDFFinal=SurveyCDF/SUMBT)  
+#Occupied habitat
+ybar_strata <- mean(someSAL$ybar_strata)
+someSAL <-mutate(someSAL, OccupiedBT =Prop*(cpT/ybar_strata)*as.numeric(Pres)*SAL)%>% mutate(OccupiedCDF =cumsum(OccupiedBT))
+SUMOccBT <-sum(someSAL$OccupiedBT)
+someSAL <-mutate(someSAL, OccCDF_final = OccupiedCDF/SUMOccBT)
+}
+
+#this could be cleaned up with map2
+shinSAL10 <-cdf.generator(SomeData$Shinnecock.2010, 1610)
+shinSAL11 <-cdf.generator(SomeData$Shinnecock.2011, 1610)
+shinSAL16 <-cdf.generator(SomeData$Shinnecock.2016, 1610)
+shinSAL17 <-cdf.generator(SomeData$Shinnecock.2017, 1610)
+
+jamSAL10 <-cdf.generator(SomeData$Jamaica.2010, 2240)
+jamSAL11 <-cdf.generator(SomeData$Jamaica.2011, 2240)
+jamSAL16 <-cdf.generator(SomeData$Jamaica.2016, 2240)
+
+NapSAL10 <-cdf.generator(SomeData$Napeague.2010, 1980)
+NapSAL16 <-cdf.generator(SomeData$Napeague.2016, 1980)
+
+MorSAL10 <-cdf.generator(SomeData$Moriches.2010, 1490)
+MorSAL11 <-cdf.generator(SomeData$Moriches.2011, 1490)
+MorSAL16 <-cdf.generator(SomeData$Moriches.2016, 1490)
+
+BY.SAL.all <-bind_rows(shinSAL10,shinSAL11,shinSAL16,shinSAL17,jamSAL10,jamSAL11,jamSAL16,NapSAL10,NapSAL16,MorSAL10,MorSAL11,MorSAL16)
+
+#plot occupied habitat for all bays and years. 
+drabcolors <-c("#d0d1e6","#a6bddb", "#67a9cf", "#1c9099", "#016450")
+
+library("ggthemes")
+a <-  ggplot(BY.SAL.all, aes(x=SAL, y=OccCDF_final, color=Bay))
+a+geom_line(size=1.5)+
+  scale_fill_manual(values=drabcolors)+scale_color_manual(values=drabcolors)+
+  facet_grid(Bay~Year)+
+  ylab("CDF")+xlab("Salinity (ppt)")+ggtitle("")+
+  #geom_rangeframe() +
+  theme_few(base_family="serif")
+#ggsave("bayearCDFs_SAL.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+#occupied vs available in each 
+a <-  ggplot(BY.SAL.all, aes(x=SAL, y=OccCDF_final))
+a+geom_line( color="black")+
+  geom_line(aes(x=SAL, y=SurveyCDFFinal), linetype="dotted")+  #dashed is available
+  facet_grid(Bay~Year)+
+  ylab("CDF")+xlab("Salinity (ppt)")+ggtitle("")+
+  theme_few(base_family="serif")
+#ggsave("bayyearcdfs_OccvAVSAL.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+#occupied vs available in each 
+BY.SAL.all <-mutate(BY.SAL.all, Year=as.factor(Year))
+a <-  ggplot(BY.SAL.all, aes(x=SAL, y=OccCDF_final, color=Year))
+a+geom_line()+
+  scale_fill_manual(values=drabcolors)+scale_color_manual(values=drabcolors)+
+  geom_line(aes(x=SAL, y=SurveyCDFFinal), linetype="dotted")+  #dashed is available
+  facet_wrap(~Bay)+
+  ylab("CDF")+xlab("Salinity (ppt)")+ggtitle("")+
+  theme_few(base_family="serif")
+#ggsave("bayyearcdfs_OccvAVSAL_byBay.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+```
+
+**Salinity: Compare occupied vs. available habitat for each one**
+```{r}
+#function for the test statistic.
+dist.test <-function(df){
+  ocdf1 <-df$OccCDF_final
+  ocdf2 <-df$SurveyCDFFinal
+Dist_test<-abs(ocdf1-ocdf2)
+Test.statistic<-max(Dist_test)
+Test.statistic}
+
+#Remember to change out the bay and silence the years you are not using. 
+#Test.statistic_S10 <-dist.test(shintemp10$OccCDF_final, shintemp10$SurveyCDFFinal)
+
+split.ts <-BY.SAL.all %>% base::split(.$BayYear) %>% map_dfr(dist.test)
+```
+
+**SALINITY: Functionalize the habitat comparison**
+```{r}
+OcAv <-function(df){
+
+#BOOTSTRAPPING TEST STATISTIC AND CONFIDENCE INTERVALS
+catch <-df$cpT 
+ybar <-mean(catch)
+Pres <-df$Pres 
+SAL <-df$SAL
+
+#Remember to change out the bay and silence the years you are not using. 
+Test.statistic_df <-dist.test(df)
+
+# THE BOOT LOOP - remember to silence the years you are not comparing
+set.seed(1234)
+results_df<-c()
+boot.store <-vector("list",length(10000))
+boot.av <-vector("list",length(10000))
+
+#turn warnings off for the bootstrap
+suppressWarnings(
+for(i in 1:10000) {  
+  #occupied
+  BootSampler<-sample(catch, length(catch),replace=FALSE) #normal way. turn off for now. 
+  #boot.sample(catch)
+  SALBoot<-(BootSampler/ybar)*(as.numeric(Pres))*SAL
+  CDFBoot<-cumsum(SALBoot)
+  SUMBoot<-sum(SALBoot)
+  CDFFinalBoot<-CDFBoot/SUMBoot
+  boot.store[[i]]<-CDFFinalBoot
+  #available
+  avBoot.sample <-sample(SAL,length(SAL),replace=FALSE)#all "available" habitat, just resampling SALerature? 
+  BTavBoot<-(avBoot.sample)
+  avCDFBoot<-cumsum(BTavBoot)
+  avSUMBoot<-sum(BTavBoot)
+  avCDFFinalBoot<-avCDFBoot/avSUMBoot
+  boot.av[[i]]<-avCDFFinalBoot
+  DistBoot<-abs(CDFFinalBoot-avCDFFinalBoot) #absolute value from bootstrapped and observed
+  results_df[i]<-max(DistBoot) 
+  }
+)
+summary(results_df)
+results_df
+sum(abs(na.omit(results_df)>abs(Test.statistic_df))/length(na.omit(results_df))) 
+#sum(abs(results_df>abs(Test.statistic_df)))/10000
+}
+```
+
+**Use the SAL OcAV function**
+```{r}
+split.OcAv <-BY.SAL.all %>% base::split(.$BayYear) %>% map_dfr(OcAv) #map it
+split.OcAv
+```
+
+**SALINITY year within a bay**
+#Alter the code for each bay you are doing this in.#
+```{r}
+#function for the test statistic.
+dist.test <-function(ocdf1,ocdf2){
+ #   ocdf1 <-ocdf1[ocdf1 > 0 & ocdf1 < 1]
+  #  ocdf2 <-ocdf2[ocdf2 > 0 & ocdf2 < 1]
+  if (length(ocdf1) > length(ocdf2)){
+    maxlength <- length(ocdf2)
+    ocdf1 <-ocdf1[1:maxlength]
+  } else if(length(ocdf2) > length(ocdf1)){
+    maxlength <- length(ocdf1)
+    ocdf2 <-ocdf2[1:maxlength]}
+Dist_test<-abs(ocdf1-ocdf2)
+Test.statistic<-my.max(Dist_test)
+Test.statistic}
+
+#Remember to change out the bay and silence the years you are not using. 
+Test.statistic_10v11 <-dist.test(shinSAL10$OccCDF_final, shinSAL11$OccCDF_final)
+Test.statistic_10v16 <-dist.test(shinSAL10$OccCDF_final, shinSAL16$OccCDF_final)
+Test.statistic_10v17 <-dist.test(shinSAL10$OccCDF_final, shinSAL17$OccCDF_final)
+Test.statistic_11v16 <-dist.test(shinSAL11$OccCDF_final, shinSAL16$OccCDF_final)
+Test.statistic_11v17 <-dist.test(shinSAL11$OccCDF_final, shinSAL17$OccCDF_final)
+Test.statistic_16v17 <-dist.test(shinSAL16$OccCDF_final, shinSAL17$OccCDF_final)
+
+tsv <-c(Test.statistic_10v11, Test.statistic_10v16, Test.statistic_10v17, Test.statistic_11v16, Test.statistic_11v17, Test.statistic_16v17)
+
+#aliasing - this would be key when we map apply but for now, this way
+catch2010 <-shinSAL10$cpT ; catch2011 <- shinSAL11$cpT ; 
+catch2016 <-shinSAL16$cpT ; catch2017 <-shinSAL17$cpT
+Pres2010  <-shinSAL10$Pres ; Pres2011 <- shinSAL11$Pres ; 
+Pres2016 <-shinSAL16$Pres ; Pres2017 <-shinSAL17$Pres
+ybar2010 <-mean(catch2010) ; ybar2011 <-mean(catch2011) ; 
+ybar2016 <-mean(catch2016) ;ybar2017 <-mean(catch2017)
+SAL2010 <-shinSAL10$SAL ; SAL2011 <- shinSAL11$SAL ; 
+SAL2016 <-shinSAL16$SAL ;SAL2017 <-shinSAL17$SAL
+
+
+# THE BOOT LOOP - remember to silence the years you are not comparing
+set.seed(1234)
+results_10v11<-c()
+results_10v16<-c()
+results_10v17<-c()
+results_11v16<-c()
+results_11v17<-c()
+results_16v17<-c()
+boot.store2010 <-vector("list",length(10000))
+boot.store2011 <-vector("list",length(10000))
+boot.store2016 <-vector("list",length(10000))
+boot.store2017 <-vector("list",length(10000))
+
+#turn warnings off for the bootstrap
+#suppressWarnings(
+for(i in 1:10000) {  
+  #####2010#####
+  BootSampler2010<-sample(catch2010, length(catch2010),replace=FALSE)  
+  SALBoot2010<-(BootSampler2010/ybar2010)*(as.numeric(Pres2010))*SAL2010 
+  CDFBoot2010<-cumsum(SALBoot2010)
+  SUMBoot2010<-sum(SALBoot2010)
+  CDFFinalBoot2010<-CDFBoot2010/SUMBoot2010
+  boot.store2010[[i]]<-CDFFinalBoot2010
+  #####2011####
+  BootSampler2011<-sample(catch2011, length(catch2011),replace=FALSE) 
+  SALBoot2011<-(BootSampler2011/ybar2011)*(as.numeric(Pres2011))*SAL2011 
+  CDFBoot2011<-cumsum(SALBoot2011)
+  SUMBoot2011<-sum(SALBoot2011)
+  CDFFinalBoot2011<-CDFBoot2011/SUMBoot2011
+  boot.store2011[[i]]<-CDFFinalBoot2011
+  #####2016######
+  BootSampler2016<-sample(catch2016, length(catch2016),replace=FALSE)  
+  SALBoot2016<-(BootSampler2016/ybar2016)*(as.numeric(Pres2016))*SAL2016 
+  CDFBoot2016<-cumsum(SALBoot2016)
+  SUMBoot2016<-sum(SALBoot2016)
+  CDFFinalBoot2016<-CDFBoot2016/SUMBoot2016
+  boot.store2016[[i]]<-CDFFinalBoot2016
+  #####2017#####
+  BootSampler2017<-sample(catch2017, length(catch2017),replace=FALSE)  
+  SALBoot2017<-(BootSampler2017/ybar2017)*(as.numeric(Pres2017))*SAL2017 
+  CDFBoot2017<-cumsum(SALBoot2017)
+  SUMBoot2017<-sum(SALBoot2017)
+  CDFFinalBoot2017<-CDFBoot2017/SUMBoot2017
+  boot.store2017[[i]]<-CDFFinalBoot2017
+  #####Test statistic For each pairwise comparison###
+  results_10v11[i]<-dist.test(CDFFinalBoot2010, CDFFinalBoot2011)
+  results_10v16[i]<-dist.test(CDFFinalBoot2010, CDFFinalBoot2016)
+  results_10v17[i]<-dist.test(CDFFinalBoot2010, CDFFinalBoot2017)
+  results_11v16[i]<-dist.test(CDFFinalBoot2011, CDFFinalBoot2016)
+  results_11v17[i]<-dist.test(CDFFinalBoot2011, CDFFinalBoot2017)
+  results_16v17[i]<-dist.test(CDFFinalBoot2016, CDFFinalBoot2017)
+  }
+
+#turn warnings back on
+#)
+
+#SIGNIFICANCE TEST RESULT
+## See how many of the values in 'result'are shine extreme than the observed value
+v10v11 <-sum(abs(na.omit(results_10v11)>abs(Test.statistic_10v11))/length(na.omit(results_10v11))) 
+v10v16 <-sum(abs(na.omit(results_10v16)>abs(Test.statistic_10v16))/length(na.omit(results_10v16)))
+v10v17 <-sum(abs(na.omit(results_10v17)>abs(Test.statistic_10v17))/length(na.omit(results_10v17)))
+v11v16 <-sum(abs(na.omit(results_11v16)>abs(Test.statistic_11v16))/length(na.omit(results_11v16)))
+v11v17 <-sum(abs(na.omit(results_11v17)>abs(Test.statistic_11v17))/length(na.omit(results_11v17)))
+v16v17 <-sum(abs(na.omit(results_16v17)>abs(Test.statistic_16v17))/length(na.omit(results_16v17)))
+
+test.results.T <- c(v10v11,v10v16,v10v17,v11v16,v11v17,v16v17) 
+```
+
+**Bay within a year comparisons**
+```{r}
+#Remember to change out the year and silence the bays you are not using. 
+Test.statistic_JvM <-dist.test(jamSAL16$OccCDF_final, MorSAL16$OccCDF_final)
+Test.statistic_JvN <-dist.test(jamSAL16$OccCDF_final, NapSAL16$OccCDF_final)
+Test.statistic_JvS <-dist.test(jamSAL16$OccCDF_final, shinSAL16$OccCDF_final)
+Test.statistic_MvN <-dist.test(MorSAL16$OccCDF_final, NapSAL16$OccCDF_final)
+Test.statistic_MvS <-dist.test(MorSAL16$OccCDF_final, shinSAL16$OccCDF_final)
+Test.statistic_NvS <-dist.test(NapSAL16$OccCDF_final, shinSAL16$OccCDF_final)
+
+test.stats.B <- c(Test.statistic_JvM,Test.statistic_JvN, Test.statistic_JvS, Test.statistic_MvN, Test.statistic_MvS, Test.statistic_NvS) 
+test.stats.B
+
+# THE BOOT LOOP - remember to silence the years you are not comparing
+set.seed(1234)
+results_JvM<-c()
+results_JvN<-c()
+results_JvS<-c()
+results_MvN<-c()
+results_MvS<-c()
+results_NvS<-c()
+boot.storeJam <-vector("list",length(10000))
+boot.storeMor <-vector("list",length(10000))
+boot.storeNap <-vector("list",length(10000))
+boot.storeShin <-vector("list",length(10000))
+
+#turn warnings off for the bootstrap
+#suppressWarnings(
+for(i in 1:10000) {  
+  #####Jam#####
+  BootSamplerJam<-sample(jamSAL16$cpT, length(jamSAL16$cpT),replace=FALSE)  
+  SALBootJam<-(BootSamplerJam/mean(jamSAL16$cpT))*(as.numeric(jamSAL16$Pres))*jamSAL16$SAL
+  CDFBootJam<-cumsum(SALBootJam)
+  SUMBootJam<-sum(SALBootJam)
+  CDFFinalBootJam<-CDFBootJam/SUMBootJam
+  boot.storeJam[[i]]<-CDFFinalBootJam
+  #####Mor####
+  BootSamplerMor<-sample(MorSAL16$cpT, length(MorSAL16$cpT),replace=FALSE) 
+ SALBootMor<-(BootSamplerMor/mean(MorSAL16$cpT))*(as.numeric(MorSAL16$Pres))*MorSAL16$SAL 
+  CDFBootMor<-cumsum(SALBootMor)
+  SUMBootMor<-sum(SALBootMor)
+  CDFFinalBootMor<-CDFBootMor/SUMBootMor
+  boot.storeMor[[i]]<-CDFFinalBootMor
+  #####Nap######
+  BootSamplerNap<-sample(NapSAL16$cpT, length(NapSAL16$cpT),replace=FALSE)  
+  SALBootNap<-(BootSamplerNap/mean(NapSAL16$cpT))*(as.numeric(NapSAL16$Pres))*NapSAL16$SAL
+  CDFBootNap<-cumsum(SALBootNap)
+  SUMBootNap<-sum(SALBootNap)
+  CDFFinalBootNap<-CDFBootNap/SUMBootNap
+  boot.storeNap[[i]]<-CDFFinalBootNap
+  #####Shin#####
+  BootSamplerShin<-sample(shinSAL16$cpT, length(shinSAL16$cpT),replace=FALSE)  
+  SALBootShin<-(BootSamplerShin/mean(shinSAL16$cpT))*(as.numeric(shinSAL16$Pres))*shinSAL16$SAL
+  CDFBootShin<-cumsum(SALBootShin)
+  SUMBootShin<-sum(SALBootShin)
+  CDFFinalBootShin<-CDFBootShin/SUMBootShin
+  boot.storeShin[[i]]<-CDFFinalBootShin
+  #####Test statistic For each pairwise comparison###
+results_JvM[i]<-dist.test(CDFFinalBootJam, CDFFinalBootMor)
+results_JvN[i]<-dist.test(CDFFinalBootJam, CDFFinalBootNap)
+results_JvS[i]<-dist.test(CDFFinalBootJam, CDFFinalBootShin)
+results_MvN[i]<-dist.test(CDFFinalBootMor, CDFFinalBootNap)
+results_MvS[i]<-dist.test(CDFFinalBootMor, CDFFinalBootShin)
+results_NvS[i]<-dist.test(CDFFinalBootNap, CDFFinalBootShin)
+  }
+
+#turn warnings back on
+#)
+
+#SIGNIFICANCE TEST RESULT
+## See how many of the values in 'result'are shine extreme than the observed value
+#issues with NANs. 
+vJvM <-sum(abs(na.omit(results_JvM)>abs(Test.statistic_JvM))/length(na.omit(results_JvM))) 
+vJvN <-sum(abs(na.omit(results_JvN)>abs(Test.statistic_JvN))/length(na.omit(results_JvN)))
+vJvS <-sum(abs(na.omit(results_JvS)>abs(Test.statistic_JvS))/length(na.omit(results_JvS)))
+vMvN <-sum(abs(na.omit(results_MvN)>abs(Test.statistic_MvN))/length(na.omit(results_MvN)))
+vMvS <-sum(abs(na.omit(results_MvS)>abs(Test.statistic_MvS))/length(na.omit(results_MvS)))
+vNvS <-sum(abs(na.omit(results_NvS)>abs(Test.statistic_NvS))/length(na.omit(results_NvS)))
+
+test.results.B <- c(vJvM,vJvN, vJvS, vMvN, vMvS, vNvS) 
+test.results.B
+```
+
+
+**SALINITY PERCENTILES**
+```{r, warning=FALSE, echo=TRUE}
+#Calculating Quantiles
+
+#FUNCTION TO EXTRACT PERCENTILES OF OCCUPIED HABITAT
+percentile.func <-function(df){
+df <- mutate(df, BTcolumn=round(SAL,digits=1),OccCDFcolumn=round(OccCDF_final,digits=2)) 
+  
+OccPer.5 <-(df[df$OccCDFcolumn=='0.05','BTcolumn']) #not interpolated version 
+OccPer.50 <-(df[df$OccCDFcolumn=='0.5','BTcolumn'])
+OccPer.95 <-(df[df$OccCDFcolumn=='0.95','BTcolumn'])
+not.interpolated <-list(OccPer.5,OccPer.50,OccPer.95)
+  #occ.ni <- rapply(not.interpolated, mean)
+#interpolated version 
+TabSurveyApprox<-approx(df$BTcolumn,df$OccCDFcolumn, n=20000)  
+TabSurveyApproxBT<-round(TabSurveyApprox$x,digits=3)        
+TabSurveyApproxSurveyOccCDF<-round(TabSurveyApprox$y,digits=3)   
+OccTabSurveyAp<-data.frame(cbind(TabSurveyApproxBT,TabSurveyApproxSurveyOccCDF))   
+OccPer.5.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.05','TabSurveyApproxBT'])  #(INTERPOLATED)
+OccPer.50.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.5','TabSurveyApproxBT'])
+OccPer.95.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.95','TabSurveyApproxBT'])
+interpolated <-list(OccPer.5.ap,OccPer.50.ap,OccPer.95.ap)
+occ.i <-rapply(interpolated, mean)
+#out <-list(not.interpolated, occ.i)
+occ.i
+}
+```
+
+**Apply percentile function**
+```{r}
+split.percent <-BY.SAL.all %>% base::split(.$BayYear) %>% map_dfr(percentile.func) #map it
+split.percent
+```
+
+**Julian Day** 
+I am not going to include this in the manuscript for now. 
+We do not need to do occupied vs. available, but it would be interesting to graph and extract percentiles for different bays within a year, and then test whether they are significantly different. We could just do it over and then integrate it into the existing figures, probably easiest. 
+
+###### **Julian Day** ##########
+```{r,fig.align='center', echo=TRUE}
+cdf.generator <-function(Bay, total.area){
+
+somejday <-filter(Bay,!is.na(jday)) %>% arrange(jday) #arrange in order of jdayerature.
+#CALCULATIONS BY STRATA
+dat.eq1 <-ddply(somejday, ~Year, summarize, Wh=(sum(area)/total.area), nh=n_distinct(X), yh=sum(cpT), ybar_strata=mean(cpT)) 
+dat.eq1 <-mutate(dat.eq1, Prop=Wh/nh) #column for Wh/nh for each year... so each year gets a value. 
+somejday <-left_join(somejday, dat.eq1) #join strata to tow-wise dataset. 
+#Available habitat; Equation 1.
+somejday <-mutate(somejday, SurveyBT = jday*Prop) %>% mutate(SurveyCDF = cumsum(SurveyBT))
+SUMBT<-sum(somejday$SurveyBT)
+somejday <- mutate(somejday, SurveyCDFFinal=SurveyCDF/SUMBT)  
+#Occupied habitat
+ybar_strata <- mean(somejday$ybar_strata)
+somejday <-mutate(somejday, OccupiedBT =Prop*(cpT/ybar_strata)*as.numeric(Pres)*jday)%>% mutate(OccupiedCDF =cumsum(OccupiedBT))
+SUMOccBT <-sum(somejday$OccupiedBT)
+somejday <-mutate(somejday, OccCDF_final = OccupiedCDF/SUMOccBT)
+}
+
+#this could be cleaned up with map2
+shinjday10 <-cdf.generator(SomeData$Shinnecock.2010, 1610)
+shinjday11 <-cdf.generator(SomeData$Shinnecock.2011, 1610)
+shinjday16 <-cdf.generator(SomeData$Shinnecock.2016, 1610)
+shinjday17 <-cdf.generator(SomeData$Shinnecock.2017, 1610)
+
+jamjday10 <-cdf.generator(SomeData$Jamaica.2010, 2240)
+jamjday11 <-cdf.generator(SomeData$Jamaica.2011, 2240)
+jamjday16 <-cdf.generator(SomeData$Jamaica.2016, 2240)
+
+Napjday10 <-cdf.generator(SomeData$Napeague.2010, 1980)
+Napjday16 <-cdf.generator(SomeData$Napeague.2016, 1980)
+
+Morjday10 <-cdf.generator(SomeData$Moriches.2010, 1490)
+Morjday11 <-cdf.generator(SomeData$Moriches.2011, 1490)
+Morjday16 <-cdf.generator(SomeData$Moriches.2016, 1490)
+
+BY.jday.all <-bind_rows(shinjday10,shinjday11,shinjday16,shinjday17,jamjday10,jamjday11,jamjday16,Napjday10,Napjday16,Morjday10,Morjday11,Morjday16)
+
+#plot occupied habitat for all bays and years. 
+drabcolors <-c("#d0d1e6","#a6bddb", "#67a9cf", "#1c9099", "#016450")
+
+library("ggthemes")
+a <-  ggplot(BY.jday.all, aes(x=jday, y=OccCDF_final, color=Bay))
+a+geom_line(size=1.5)+
+  scale_fill_manual(values=drabcolors)+scale_color_manual(values=drabcolors)+
+  facet_grid(Bay~Year)+
+  ylab("CDF")+xlab("Julian Day")+ggtitle("")+
+  #geom_rangeframe() +
+  theme_few(base_family="serif")
+#ggsave("bayearCDFs_jday.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+#occupied vs available in each 
+a <-  ggplot(BY.jday.all, aes(x=jday, y=OccCDF_final))
+a+geom_line( color="black")+
+  geom_line(aes(x=jday, y=SurveyCDFFinal), linetype="dotted")+  #dashed is available
+  facet_grid(Bay~Year)+
+  ylab("CDF")+xlab("Julian Day)")+ggtitle("")+
+  theme_few(base_family="serif")
+#ggsave("bayyearcdfs_OccvAVjday.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+#occupied vs available in each 
+BY.jday.all <-mutate(BY.jday.all, Year=as.factor(Year))
+a <-  ggplot(BY.jday.all, aes(x=jday, y=OccCDF_final, color=Year))
+a+geom_line()+
+  scale_fill_manual(values=drabcolors)+scale_color_manual(values=drabcolors)+
+  geom_line(aes(x=jday, y=SurveyCDFFinal), linetype="dotted")+  #dashed is available
+  facet_wrap(~Bay)+
+  ylab("CDF")+xlab("Julian Day")+ggtitle("")+
+  theme_few(base_family="serif")
+#ggsave("bayyearcdfs_OccvAVjday_byBay.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+#most interesting to show differences between occupied habitat jday bays within a year. 
+BY.jday.all <-mutate(BY.jday.all, Year=as.factor(Year)) 
+a <-  ggplot(BY.jday.all, aes(x=jday, y=OccCDF_final, color=Bay))
+a+geom_line()+
+  scale_fill_manual(values=drabcolors)+scale_color_manual(values=drabcolors)+
+  facet_wrap(~Year)+
+  ylab("CDF")+xlab("Julian Day")+ggtitle("")+
+  theme_few(base_family="serif")
+#ggsave("bayyearcdfs_OCCONLYjday_byBay.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+```
+
+Not going to worry about comparing occupied vs. available habitat for Jday because it's kind of meaningless.
+
+
+**JDAY year within a bay**
+#Alter the code for each bay you are doing this in.#
+```{r}
+#function for the test statistic.
+dist.test <-function(ocdf1,ocdf2){
+ #   ocdf1 <-ocdf1[ocdf1 > 0 & ocdf1 < 1]
+  #  ocdf2 <-ocdf2[ocdf2 > 0 & ocdf2 < 1]
+  if (length(ocdf1) > length(ocdf2)){
+    maxlength <- length(ocdf2)
+    ocdf1 <-ocdf1[1:maxlength]
+  } else if(length(ocdf2) > length(ocdf1)){
+    maxlength <- length(ocdf1)
+    ocdf2 <-ocdf2[1:maxlength]}
+Dist_test<-abs(ocdf1-ocdf2)
+Test.statistic<-my.max(Dist_test)
+Test.statistic}
+
+#Remember to change out the bay and silence the years you are not using. 
+Test.statistic_10v11 <-dist.test(shinjday10$OccCDF_final, shinjday11$OccCDF_final)
+Test.statistic_10v16 <-dist.test(shinjday10$OccCDF_final, shinjday16$OccCDF_final)
+Test.statistic_10v17 <-dist.test(shinjday10$OccCDF_final, shinjday17$OccCDF_final)
+Test.statistic_11v16 <-dist.test(shinjday11$OccCDF_final, shinjday16$OccCDF_final)
+Test.statistic_11v17 <-dist.test(shinjday11$OccCDF_final, shinjday17$OccCDF_final)
+Test.statistic_16v17 <-dist.test(shinjday16$OccCDF_final, shinjday17$OccCDF_final)
+
+tsv <-c(Test.statistic_10v11, Test.statistic_10v16, Test.statistic_10v17, Test.statistic_11v16, Test.statistic_11v17, Test.statistic_16v17)
+
+#aliasing - this would be key when we map apply but for now, this way
+catch2010 <-shinjday10$cpT ; #catch2011 <- shinjday11$cpT ; 
+catch2016 <-shinjday16$cpT ; #catch2017 <-shinjday17$cpT
+Pres2010  <-shinjday10$Pres ; #Pres2011 <- shinjday11$Pres ; 
+Pres2016 <-shinjday16$Pres ; #Pres2017 <-shinjday17$Pres
+ybar2010 <-mean(catch2010) ; #ybar2011 <-mean(catch2011) ; 
+ybar2016 <-mean(catch2016) ;#ybar2017 <-mean(catch2017)
+jday2010 <-shinjday10$jday ; #jday2011 <- shinjday11$jday ; 
+jday2016 <-shinjday16$jday ;#jday2017 <-shinjday17$jday
+
+
+# THE BOOT LOOP - remember to silence the years you are not comparing
+set.seed(1234)
+results_10v11<-c()
+results_10v16<-c()
+results_10v17<-c()
+results_11v16<-c()
+results_11v17<-c()
+results_16v17<-c()
+boot.store2010 <-vector("list",length(10000))
+boot.store2011 <-vector("list",length(10000))
+boot.store2016 <-vector("list",length(10000))
+boot.store2017 <-vector("list",length(10000))
+
+#turn warnings off for the bootstrap
+#suppressWarnings(
+for(i in 1:10000) {  
+  #####2010#####
+  BootSampler2010<-sample(catch2010, length(catch2010),replace=FALSE)  
+  jdayBoot2010<-(BootSampler2010/ybar2010)*(as.numeric(Pres2010))*jday2010 
+  CDFBoot2010<-cumsum(jdayBoot2010)
+  SUMBoot2010<-sum(jdayBoot2010)
+  CDFFinalBoot2010<-CDFBoot2010/SUMBoot2010
+  boot.store2010[[i]]<-CDFFinalBoot2010
+  #####2011####
+  BootSampler2011<-sample(catch2011, length(catch2011),replace=FALSE) 
+  jdayBoot2011<-(BootSampler2011/ybar2011)*(as.numeric(Pres2011))*jday2011 
+  CDFBoot2011<-cumsum(jdayBoot2011)
+  SUMBoot2011<-sum(jdayBoot2011)
+  CDFFinalBoot2011<-CDFBoot2011/SUMBoot2011
+  boot.store2011[[i]]<-CDFFinalBoot2011
+  #####2016######
+  BootSampler2016<-sample(catch2016, length(catch2016),replace=FALSE)  
+  jdayBoot2016<-(BootSampler2016/ybar2016)*(as.numeric(Pres2016))*jday2016 
+  CDFBoot2016<-cumsum(jdayBoot2016)
+  SUMBoot2016<-sum(jdayBoot2016)
+  CDFFinalBoot2016<-CDFBoot2016/SUMBoot2016
+  boot.store2016[[i]]<-CDFFinalBoot2016
+  #####2017#####
+  BootSampler2017<-sample(catch2017, length(catch2017),replace=FALSE)  
+  jdayBoot2017<-(BootSampler2017/ybar2017)*(as.numeric(Pres2017))*jday2017 
+  CDFBoot2017<-cumsum(jdayBoot2017)
+  SUMBoot2017<-sum(jdayBoot2017)
+  CDFFinalBoot2017<-CDFBoot2017/SUMBoot2017
+  boot.store2017[[i]]<-CDFFinalBoot2017
+  #####Test statistic For each pairwise comparison###
+  results_10v11[i]<-dist.test(CDFFinalBoot2010, CDFFinalBoot2011)
+  results_10v16[i]<-dist.test(CDFFinalBoot2010, CDFFinalBoot2016)
+  results_10v17[i]<-dist.test(CDFFinalBoot2010, CDFFinalBoot2017)
+  results_11v16[i]<-dist.test(CDFFinalBoot2011, CDFFinalBoot2016)
+  results_11v17[i]<-dist.test(CDFFinalBoot2011, CDFFinalBoot2017)
+  results_16v17[i]<-dist.test(CDFFinalBoot2016, CDFFinalBoot2017)
+  }
+
+#turn warnings back on
+#)
+
+#SIGNIFICANCE TEST RESULT
+## See how many of the values in 'result'are shine extreme than the observed value
+v10v11 <-sum(abs(na.omit(results_10v11)>abs(Test.statistic_10v11))/length(na.omit(results_10v11))) 
+v10v16 <-sum(abs(na.omit(results_10v16)>abs(Test.statistic_10v16))/length(na.omit(results_10v16)))
+v10v17 <-sum(abs(na.omit(results_10v17)>abs(Test.statistic_10v17))/length(na.omit(results_10v17)))
+v11v16 <-sum(abs(na.omit(results_11v16)>abs(Test.statistic_11v16))/length(na.omit(results_11v16)))
+v11v17 <-sum(abs(na.omit(results_11v17)>abs(Test.statistic_11v17))/length(na.omit(results_11v17)))
+v16v17 <-sum(abs(na.omit(results_16v17)>abs(Test.statistic_16v17))/length(na.omit(results_16v17)))
+
+test.results.T <- c(v10v11,v10v16,v10v17,v11v16,v11v17,v16v17) 
+```
+
+
+**JDAY: Bay within a year comparisons**
+```{r}
+#Remember to change out the year and silence the bays you are not using. 
+Test.statistic_JvM <-dist.test(jamjday10$OccCDF_final, Morjday10$OccCDF_final)
+Test.statistic_JvN <-dist.test(jamjday10$OccCDF_final, Napjday10$OccCDF_final)
+Test.statistic_JvS <-dist.test(jamjday10$OccCDF_final, shinjday10$OccCDF_final)
+Test.statistic_MvN <-dist.test(Morjday10$OccCDF_final, Napjday10$OccCDF_final)
+Test.statistic_MvS <-dist.test(Morjday10$OccCDF_final, shinjday10$OccCDF_final)
+Test.statistic_NvS <-dist.test(Napjday10$OccCDF_final, shinjday10$OccCDF_final)
+
+test.stats.B <- c(Test.statistic_JvM,Test.statistic_JvN, Test.statistic_JvS, Test.statistic_MvN, Test.statistic_MvS, Test.statistic_NvS) 
+test.stats.B
+
+# THE BOOT LOOP - remember to silence the years you are not comparing
+set.seed(1234)
+results_JvM<-c()
+results_JvN<-c()
+results_JvS<-c()
+results_MvN<-c()
+results_MvS<-c()
+results_NvS<-c()
+boot.storeJam <-vector("list",length(10000))
+boot.storeMor <-vector("list",length(10000))
+boot.storeNap <-vector("list",length(10000))
+boot.storeShin <-vector("list",length(10000))
+
+#turn warnings off for the bootstrap
+#suppressWarnings(
+for(i in 1:10000) {  
+  #####Jam#####
+  BootSamplerJam<-sample(jamjday10$cpT, length(jamjday10$cpT),replace=FALSE)  
+  jdayBootJam<-(BootSamplerJam/mean(jamjday10$cpT))*(as.numeric(jamjday10$Pres))*jamjday10$jday
+  CDFBootJam<-cumsum(jdayBootJam)
+  SUMBootJam<-sum(jdayBootJam)
+  CDFFinalBootJam<-CDFBootJam/SUMBootJam
+  boot.storeJam[[i]]<-CDFFinalBootJam
+  #####Mor####
+  BootSamplerMor<-sample(Morjday10$cpT, length(Morjday10$cpT),replace=FALSE) 
+ jdayBootMor<-(BootSamplerMor/mean(Morjday10$cpT))*(as.numeric(Morjday10$Pres))*Morjday10$jday 
+  CDFBootMor<-cumsum(jdayBootMor)
+  SUMBootMor<-sum(jdayBootMor)
+  CDFFinalBootMor<-CDFBootMor/SUMBootMor
+  boot.storeMor[[i]]<-CDFFinalBootMor
+  #####Nap######
+  BootSamplerNap<-sample(Napjday10$cpT, length(Napjday10$cpT),replace=FALSE)  
+  jdayBootNap<-(BootSamplerNap/mean(Napjday10$cpT))*(as.numeric(Napjday10$Pres))*Napjday10$jday
+  CDFBootNap<-cumsum(jdayBootNap)
+  SUMBootNap<-sum(jdayBootNap)
+  CDFFinalBootNap<-CDFBootNap/SUMBootNap
+  boot.storeNap[[i]]<-CDFFinalBootNap
+  #####Shin#####
+  BootSamplerShin<-sample(shinjday10$cpT, length(shinjday10$cpT),replace=FALSE)  
+  jdayBootShin<-(BootSamplerShin/mean(shinjday10$cpT))*(as.numeric(shinjday10$Pres))*shinjday10$jday
+  CDFBootShin<-cumsum(jdayBootShin)
+  SUMBootShin<-sum(jdayBootShin)
+  CDFFinalBootShin<-CDFBootShin/SUMBootShin
+  boot.storeShin[[i]]<-CDFFinalBootShin
+  #####Test statistic For each pairwise comparison###
+results_JvM[i]<-dist.test(CDFFinalBootJam, CDFFinalBootMor)
+results_JvN[i]<-dist.test(CDFFinalBootJam, CDFFinalBootNap)
+results_JvS[i]<-dist.test(CDFFinalBootJam, CDFFinalBootShin)
+results_MvN[i]<-dist.test(CDFFinalBootMor, CDFFinalBootNap)
+results_MvS[i]<-dist.test(CDFFinalBootMor, CDFFinalBootShin)
+results_NvS[i]<-dist.test(CDFFinalBootNap, CDFFinalBootShin)
+  }
+
+#turn warnings back on
+#)
+
+#SIGNIFICANCE TEST RESULT
+## See how many of the values in 'result'are shine extreme than the observed value
+#issues with NANs. 
+vJvM <-sum(abs(na.omit(results_JvM)>abs(Test.statistic_JvM))/length(na.omit(results_JvM))) 
+vJvN <-sum(abs(na.omit(results_JvN)>abs(Test.statistic_JvN))/length(na.omit(results_JvN)))
+vJvS <-sum(abs(na.omit(results_JvS)>abs(Test.statistic_JvS))/length(na.omit(results_JvS)))
+vMvN <-sum(abs(na.omit(results_MvN)>abs(Test.statistic_MvN))/length(na.omit(results_MvN)))
+vMvS <-sum(abs(na.omit(results_MvS)>abs(Test.statistic_MvS))/length(na.omit(results_MvS)))
+vNvS <-sum(abs(na.omit(results_NvS)>abs(Test.statistic_NvS))/length(na.omit(results_NvS)))
+
+test.results.B <- c(vJvM,vJvN, vJvS, vMvN, vMvS, vNvS) 
+test.results.B
+```
+
+
+**JDAY PERCENTILES**
+```{r, warning=FALSE, echo=TRUE}
+#Calculating Quantiles
+
+#FUNCTION TO EXTRACT PERCENTILES OF OCCUPIED HABITAT
+percentile.func <-function(df){
+df <- mutate(df, BTcolumn=round(jday,digits=1),OccCDFcolumn=round(OccCDF_final,digits=2)) 
+  
+OccPer.5 <-(df[df$OccCDFcolumn=='0.05','BTcolumn']) #not interpolated version 
+OccPer.50 <-(df[df$OccCDFcolumn=='0.5','BTcolumn'])
+OccPer.95 <-(df[df$OccCDFcolumn=='0.95','BTcolumn'])
+not.interpolated <-list(OccPer.5,OccPer.50,OccPer.95)
+  #occ.ni <- rapply(not.interpolated, mean)
+#interpolated version 
+TabSurveyApprox<-approx(df$BTcolumn,df$OccCDFcolumn, n=20000)  
+TabSurveyApproxBT<-round(TabSurveyApprox$x,digits=3)        
+TabSurveyApproxSurveyOccCDF<-round(TabSurveyApprox$y,digits=3)   
+OccTabSurveyAp<-data.frame(cbind(TabSurveyApproxBT,TabSurveyApproxSurveyOccCDF))   
+OccPer.5.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.05','TabSurveyApproxBT'])  #(INTERPOLATED)
+OccPer.50.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.5','TabSurveyApproxBT'])
+OccPer.95.ap <-(OccTabSurveyAp[OccTabSurveyAp$TabSurveyApproxSurveyOccCDF=='0.95','TabSurveyApproxBT'])
+interpolated <-list(OccPer.5.ap,OccPer.50.ap,OccPer.95.ap)
+occ.i <-rapply(interpolated, mean)
+#out <-list(not.interpolated, occ.i)
+occ.i
+}
+```
+
+**Apply percentile function**
+```{r}
+split.percent <-BY.jday.all %>% base::split(.$BayYear) %>% map_dfr(percentile.func) #map it
+split.percent
+```
+
