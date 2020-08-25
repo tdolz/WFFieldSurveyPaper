@@ -30,7 +30,8 @@ Shinnecock: 1.61 KM
 Moriches: 1.49 KM
 Jamaica Bay: 2.24 KM
 Napeague Harbor: 1.98 KM
-Cold Spring Pond: 0.52 KM
+Cold Spring Pond: 0.52 KM  
+Mattituck Creek: 0.37 KM
 
 **I think I need to measure these for real somehow to determine which bay is the most productive per unit area**
 https://jamesepaterson.github.io/jamespatersonblog/03_trackingworkshop_homeranges
@@ -50,101 +51,12 @@ library("dplyr")
 ```{r}
 #keeping everything in this folder
 setwd("/Users//tdolan/Documents//R-Github//WFFieldSurveyPaper")
-somedata3<-read.csv("somedata3_Mar-4-2020.csv", na.strings="", header=TRUE)
+somedata3<-read.csv("skcompiled4gams2.csv", na.strings="", header=TRUE)
 #somedata4 <-dplyr::select(somedata3,-rcpT,-std_cpue,-cpue)
 ```
 
-##**Calculate CDFS for available vs. occupied habitat**##  
-Separately for each bay, but with data grouped across years.   
-
-Split data by bays : **Change this chunk each time** other chunks remain the same. 
-```{r, include=TRUE, echo=TRUE}
-SomeData <-somedata3 %>% dplyr::select(-minl, -maxl, -sdl, -distswept, -Tow, -Towindex) %>% mutate(Pres =ifelse(cpT > 0,1,0))%>%
-  unite(BayYear,Bay,Year, remove=FALSE)%>% base::split(.$Bay)
-Bay <-SomeData$`Shinnecock` # Just change out the bay you are looking at. 
-
-total.area <- 1.61*1000 #for Shinnecock
-       #   <- 1.49*1000 #for Moriches
-       #   <- 2.24*1000 #for Jamaica
-       #   <- 1.98*1000 #for Napeague
-       #   <- 0.52*1000 #for Cold Spring Pond
-      #    <- 0.37*1000 #for Mattituck
-```
-
-
-**Total Productivity by bay calculation**
-```{r}
-all.area <-(1.61*1000) + (1.49*1000) + (2.24*1000) + (1.98*1000) + (0.52*1000) +(0.37*1000)
-
-SomeData2 <-somedata3 %>% dplyr::select(-minl, -maxl, -sdl, -distswept, -Tow, -Towindex) %>% mutate(Pres =ifelse(cpT > 0,1,0))%>%
-  unite(BayYear,Bay,Year, remove=FALSE)
-
-#Skyler's way function:
-split.bay <- SomeData2 %>% base::split(.$Bay) 
-skyprod <-function(df, areA) {
-dat.eq1 <-ddply(df, ~Year, summarize, nh=n_distinct(X)) %>% mutate(Prop=(areA*1000)/nh) 
-df <-left_join(df, dat.eq1) %>%  mutate(Prod=Prop*cpT)
-df.prod <-ddply(df, ~Year, summarize, sumProd=sum(Prod))
-print(c(df.prod$sumProd,mean(df.prod$sumProd),sd(df.prod$sumProd)))}
-
-a <-skyprod(split.bay$Shinnecock,1.61)
-a <- as.data.frame(cbind(c(2010,2011,2016,2017,"mean","sd"),a)); names(a) <-c("year","Shinnecock")
-a <-mutate(a,year=as.factor(year))
-b <-skyprod(split.bay$Jamaica,2.24)
-b <- as.data.frame(cbind(c(2010,2011,2016,"mean","sd"),b)); names(b) <-c("year","Jamaica") 
-b <-mutate(b,year=as.factor(year)) %>% full_join(a, by="year")
-c <-skyprod(split.bay$Moriches,1.49)
-c <- as.data.frame(cbind(c(2010,2011,2016,"mean","sd"),c)); names(c) <-c("year","Moriches")
-c <-mutate(c,year=as.factor(year)) %>% full_join(b, by="year")
-d <-skyprod(split.bay$Napeague,1.98)
-d <- as.data.frame(cbind(c(2010,2016,"mean","sd"),d)); names(d) <-c("year","Napeague")
-d<-mutate(d,year=as.factor(year))%>% full_join(c, by="year")
-e <-skyprod(split.bay$`Cold Spring Pond`,0.52)
-e <- as.data.frame(cbind(c(2010,"mean","sd"),e)); names(e) <-c("year","Cold Spring Pond") 
-e <-mutate(e,year=as.factor(year))%>% full_join(d, by="year")
-
-#peak, week before peak, and week after peak
-# ratio of the peak to the whole season. or just the peak and the sum overall. 
-#for bays with two peaks do the bigger peak. 
-
-MTtows <-read.csv("mt YOY length and weight.csv",header=TRUE)
-MTtows <-mutate(MTtows, len = as.numeric(Length..mm.), Tow=as.factor(Tow), Date=as.Date(Date)) %>%mutate(pres = ifelse(is.na(len),0,1))
-MTcpt <-ddply(MTtows, Date~Tow, summarize, cpT=sum(pres)) %>% separate(Date, c("Year","m","d"),sep="-", remove=FALSE) %>% dplyr::rename(X=Tow)
-
-f <-skyprod(MTcpt,0.37)
-f <- as.data.frame(cbind(c(2015, 2016,"mean","sd"),f)); names(f) <-c("year","Mattituck")
-f <-mutate(f,year=as.factor(year))%>% full_join(e, by="year")
-
-x <-c("2010","2011","2015","2016","2017","mean","sd")
-f.season<- f %>% slice(match(x,year))
-
-
-gatherseason <-f.season%>%
-  pivot_longer(c(Mattituck,`Cold Spring Pond`,Napeague,Moriches,Jamaica,Shinnecock),names_to = "Bay",values_to = "value") %>%na.omit() %>%
- unite(BayYear, Bay, year, sep=" ", remove=FALSE)%>%mutate(value=as.numeric(as.character(value)))
-
-gatherseason.nosd <-filter(gatherseason, year !="sd")
-
-
-drabcolors <-c("#f6eff7","#d0d1e6","#a6bddb", "#67a9cf", "#1c9099", "#016450")
-
-gatherseason.nosd %>%
-  filter(year %in% c(2010,2011,2015,2016,2017))%>%
-  ggplot(aes(x=BayYear,y=value, fill=Bay)) +
-  geom_bar(stat="identity", position="dodge")+ ylim(c(0,35000))+
-
-  #geom_errorbar(aes(ymin=`95% LCI`, ymax=`95% UCI`),
-   #               width=.2,position=position_dodge(.9), colour="lightgrey")+
-  scale_fill_manual(values=drabcolors)+
-  #facet_wrap(~year)+
-  xlab("")+ylab("density")+
-  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))
-#ggsave("bayprod_season.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
-#dev.off()
-
-```
-
-Repeat the above analysis but for the days before and after the peak. 
+## Catch per area at the peak ##
+**Create the prepeak dataset**
 ```{r}
 eday <- function(df){
   edays <-c()
@@ -155,10 +67,13 @@ df <-cbind(df,edays)
 }
 prepeak <-somedata3%>% dplyr::select(-minl, -maxl, -sdl, -distswept, -Tow, -Towindex) %>% mutate(Date=as.Date(Date))%>%
   unite(BayYear,Bay,Year, remove=FALSE)%>% arrange(Date)%>% base::split(.$BayYear) %>% map(eday)  #very important to arrange by date first. 
-
+somedata3 <-mutate(somedata3,Date=as.Date(Date), Year=as.factor(Year), area=!is.na(area))
 findpeak <-ddply(somedata3, Bay~Year~Date, summarize, new.cpue=sum(cpT)/sum(area))
 
-#what about instead of edays we just literally use the date would that work? 
+#Mattituck
+MTtows <-read.csv("mt YOY length and weight.csv",header=TRUE)
+MTtows <-mutate(MTtows, len = as.numeric(Length..mm.), Tow=as.factor(Tow), Date=as.Date(Date)) %>%mutate(pres = ifelse(is.na(len),0,1))
+MTcpt <-ddply(MTtows, Date~Tow, summarize, cpT=sum(pres)) %>% separate(Date, c("Year","m","d"),sep="-", remove=FALSE) %>% dplyr::rename(X=Tow)
 
 #subset the dataset to before the peak by manually looking at what eday corresponds to the maximum cpue, the day before and after. 
 prepeak_CSP10 <-filter(prepeak$`Cold Spring Pond_2010`, edays %in% c(0,7)) 
@@ -174,60 +89,85 @@ prepeak_Sh10 <-filter(prepeak$`Shinnecock_2010`, edays %in% c(9,27, 43)) #First 
 prepeak_Sh11 <-filter(prepeak$`Shinnecock_2011`, edays %in% c(0,25)) #First peak, second peak is at edays=79
 prepeak_Sh16 <-filter(prepeak$`Shinnecock_2016`, edays %in% c(23, 30, 37)) #First peak, second peak, which is slightly larger, is at edays=56
 prepeak_Sh17 <-filter(prepeak$`Shinnecock_2017`, edays %in% c(12, 20, 26)) #first peak, second peak, which is smaller, is at edays=47
-prepeak_MT15 <-filter(MTcpt, Year=="2015") %>% eday() %>% filter(edays  %in% c(0, 13, 27)) %>% mutate(Year=as.integer(Year), X=as.integer(X), Bay="Mattituck")
+prepeak_MT15 <-filter(MTcpt, Year=="2015") %>% eday() %>% filter(edays  %in% c(0, 13, 27)) %>% mutate(Year=as.integer(Year),X=as.integer(X), Bay="Mattituck")
 prepeak_MT16 <<-filter(MTcpt, Year=="2016") %>% eday() %>% filter(edays  %in% c(11, 28, 39)) %>% mutate(Year=as.integer(Year),X=as.integer(X),Bay="Mattituck")
 prepeak <-bind_rows(prepeak_CSP10,prepeak_J10,prepeak_J11,prepeak_J16,prepeak_M10,prepeak_M11,prepeak_M16,prepeak_N10,prepeak_N16,prepeak_Sh10,prepeak_Sh11,prepeak_Sh16,prepeak_Sh17, prepeak_MT15, prepeak_MT16) 
 
-#use Skyler's way function:
+
+```
+
+# **New version 8/23/2020** #
+
+```{r}
+
+#we don't want the standard deviation, we want the standard error of the mean. 
+std <- function(x) sd(x)/sqrt(length(x))
+
+## we want the mean catch per area swept across the peak ##
+CPArea <-function(df) {
+dat.eq1 <-ddply(df, Date~Year, summarize, area_swept=sum(area), total.catch=sum(cpT))%>% mutate(daily.cpue=total.catch/area_swept) 
+df.prod <-ddply(dat.eq1, ~Year, summarize, avProd=mean(daily.cpue), seprod=std(daily.cpue))
+df.prod}
+
+#use function00
 split.bay <- prepeak %>% base::split(.$Bay) 
 
-a <-skyprod(split.bay$Shinnecock,1.61)
-a <- as.data.frame(cbind(c(2010,2011,2016,2017,"mean","sd"),a)); names(a) <-c("year","Shinnecock")
-a <-mutate(a,year=as.factor(year))
-b <-skyprod(split.bay$Jamaica,2.24)
-b <- as.data.frame(cbind(c(2010,2011,2016,"mean","sd"),b)); names(b) <-c("year","Jamaica") 
-b <-mutate(b,year=as.factor(year)) %>% full_join(a, by="year")
-c <-skyprod(split.bay$Moriches,1.49)
-c <- as.data.frame(cbind(c(2010,2011,2016,"mean","sd"),c)); names(c) <-c("year","Moriches")
-c <-mutate(c,year=as.factor(year)) %>% full_join(b, by="year")
-d <-skyprod(split.bay$Napeague,1.98)
-d <- as.data.frame(cbind(c(2010,2016,"mean","sd"),d)); names(d) <-c("year","Napeague")
-d<-mutate(d,year=as.factor(year))%>% full_join(c, by="year")
-e <-skyprod(split.bay$`Cold Spring Pond`,0.52)
-e <- as.data.frame(cbind(c(2010,"mean","sd"),e)); names(e) <-c("year","Cold Spring Pond") 
-e <-mutate(e,year=as.factor(year))%>% full_join(d, by="year")
-f <-skyprod(MTcpt,0.37)
-f <- as.data.frame(cbind(c(2015, 2016,"mean","sd"),f)); names(f) <-c("year","Mattituck")
-f <-mutate(f,year=as.factor(year))%>% full_join(e, by="year")
+a <-CPArea(split.bay$Shinnecock)
+a <-mutate(a,Year=as.factor(Year), Bay="Shinnecock")
+b <-CPArea(split.bay$Jamaica)
+b <-mutate(b,Year=as.factor(Year), Bay="Jamaica") 
+c <-CPArea(split.bay$Moriches)
+c <-mutate(c,Year=as.factor(Year), Bay="Moriches")
+d <-CPArea(split.bay$Napeague)
+d<-mutate(d,Year=as.factor(Year), Bay="Napeague")
+e <-CPArea(split.bay$`Cold Spring Pond`)
+e <-mutate(e,Year=as.factor(Year), Bay="Cold Spring Pond")
 
-x <-c("2010","2011","2015","2016","2017","mean","sd")
-f.prepeak<- f %>% slice(match(x,year))
 
-gatherpp <-f.prepeak%>%
-  pivot_longer(c(Mattituck,`Cold Spring Pond`,Napeague,Moriches,Jamaica,Shinnecock),names_to = "Bay",values_to = "value") %>%na.omit() %>%
- unite(BayYear, Bay, year, sep=" ", remove=FALSE)%>%mutate(value=as.numeric(as.character(value)))
+###Mattituck###
+# we do not have per tow area swept for mattituck readily available, so here is a workaround.
+MTarea <-read.csv("some_mt_data.csv",header=TRUE) #per week area
+MTarea <-dplyr::select(MTarea,Date,area)%>% mutate(Date=as.Date(Date))
+prepeak_MT <-bind_rows(prepeak_MT15, prepeak_MT16) #per tow dataset
 
-gatherpp.nosd <-filter(gatherpp, year !="sd")
+dat.eq1 <-ddply(prepeak_MT, Date~Year, summarize, total.catch=sum(cpT)) #now we have weekly catch
+dat.eq1 <-left_join(dat.eq1, MTarea, by="Date") %>% mutate(daily.cpue=total.catch/area) %>%dplyr::select(Year,daily.cpue)
+f <-ddply(dat.eq1, ~Year, summarize, avProd=mean(daily.cpue), seprod=std(daily.cpue))
+f <-mutate(f,Year=as.factor(Year), Bay="Mattituck")
 
+peakdens <-bind_rows(a,b,c,d,e,f)%>%unite(BayYear, Bay, Year, sep=" ", remove=FALSE)%>%arrange(Year)
+peakdens <-mutate(peakdens, UCI=avProd + seprod, LCI=avProd-seprod)
 
 drabcolors <-c("#f6eff7","#d0d1e6","#a6bddb", "#67a9cf", "#1c9099", "#016450")
 
-gatherpp.nosd %>%
-  filter(year %in% c(2010,2011,2015,2016,2017))%>%
-  ggplot(aes(x=BayYear,y=value, fill=Bay)) +
+peakdens %>%
+  filter(Year %in% c(2010,2011,2015,2016,2017))%>%
+  ggplot(aes(x=BayYear,y=avProd, fill=Bay)) +
   geom_bar(stat="identity", position="dodge")+ #ylim(c(0,35000))+
-
-  #geom_errorbar(aes(ymin=`95% LCI`, ymax=`95% UCI`),
-   #               width=.2,position=position_dodge(.9), colour="lightgrey")+
+  geom_errorbar(aes(ymin=LCI, ymax=UCI),
+              width=.2,position=position_dodge(.9), colour="lightgrey")+
   scale_fill_manual(values=drabcolors)+
   #facet_wrap(~year)+
-  xlab("")+ylab("density")+
+  xlab("")+ylab("mean CPUE at peak abundance")+
   theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))
 #ggsave("bayprod_prepeak.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 
 
 ```
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
