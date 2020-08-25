@@ -183,13 +183,14 @@ mandg <-read.csv("growthandmort.csv",header=TRUE) #growth and mortality. importi
 mandg <-unite(mandg, BayYear, Bay,Year, sep=" ", remove=FALSE) %>%mutate(Year=as.factor(Year))
 peakdens2 <-mutate(peakdens,cohort="both", Year=as.factor(Year)) %>% dplyr::select(-USE,-LSE) 
 peakdens2 <-left_join(peakdens2, mandg, by=c("Bay","Year","BayYear","cohort"))
+peakdens2 <-filter(peakdens2, cohort=="both")
+peakdensNN <-filter(peakdens2, BayYear != "Napeague 2010")
 ```
 
 **Visualize whether Napeague 2010 is an outlier**
 ```{r}
 #plot labels.
 peakdens2 %>%
-  filter(cohort == "both")%>%
  filter(BayYear != "Napeague 2010")%>%
   ggplot(aes(x=avProd,y=mortality)) +
   geom_point(aes(color=Bay))+
@@ -201,12 +202,10 @@ peakdens2 %>%
 From here we have decided to get rid of napeague 2010.
 
 **Compare mortality vs. abundance at peak**
-without napeague 2010
+WITH NAPEAGUE
 ```{r}
-### LOG FIT ###
-peakdens3 <-filter(peakdens2, BayYear != "Napeague 2010", cohort=="both")
-y <- peakdens3$mortality
-x <-peakdens3$avProd
+y <- peakdens2$mortality
+x <-peakdens2$avProd
 
 ### Linear fit ###
 #plot mortality vs. mean cpue. log fit. 
@@ -214,24 +213,59 @@ linM <-lm(y~x)
 summary(linM)
 AIC(linM)
 peakdens2 %>%
-  filter(cohort == "both")%>%
-  #filter(BayYear != "Napeague 2010")%>%
   ggplot(aes(x=avProd,y=mortality, label=alias, color=Bay)) + 
-  geom_text(check_overlap = TRUE)+
+  geom_text_repel()+
   #geom_point(aes(color=Bay))+
+  #stat_regline_equation()+
   scale_color_manual(values=drabcolors)+
   #geom_label_repel(aes(label = alias), box.padding   = 0.35, point.padding = 0.5, segment.color = 'grey50')+
-  stat_smooth(method="lm", se=FALSE, colour="black", linetype="dashed", size=0.2, fullrange=TRUE, data=peakdens3)+
+  stat_smooth(method="lm", se=FALSE, colour="black", linetype="dashed", size=0.2, fullrange=TRUE)+
   xlab("mean CPUE at peak")+ylab("mortality (Z)")+
   theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "black"))
-#ggsave("mortVcpue_trend_LM_noNap.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#ggsave("mortVcpue_trend_LM_Nap.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 ```
 
+**Compare mortality vs. abundance at peak**
+WITHOUT NAPEAGUE - and take napeague off of plot. 
+```{r}
+y <- peakdensNN$mortality
+x <-peakdensNN$avProd
 
+### Linear fit ###
+#plot mortality vs. mean cpue. log fit. 
+linM <-lm(y~x)
+summary(linM)
+AIC(linM)
+peakdensNN %>%
+  ggplot(aes(x=avProd,y=mortality, label=alias, color=Bay)) + 
+  geom_text_repel()+
+  #geom_point(aes(color=Bay))+
+  scale_color_manual(values=drabcolors)+
+  #geom_label_repel(aes(label = alias), box.padding   = 0.35, point.padding = 0.5, segment.color = 'grey50')+
+  stat_smooth(method="lm", se=FALSE, colour="black", linetype="dashed", size=0.2, fullrange=TRUE)+
+  xlab("mean CPUE at peak")+ylab("mortality (Z)")+
+  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "black"))
+#ggsave("mortVcpue_trend_LM_NONAP.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+### SILENT NAPEAGUE ###
+#plot mortality vs. mean cpue. log fit. 
+peakdens2 %>%
+  ggplot(aes(x=avProd,y=mortality, label=alias, color=Bay)) + 
+  geom_text_repel()+
+  #geom_point(aes(color=Bay))+
+  scale_color_manual(values=drabcolors)+
+  #geom_label_repel(aes(label = alias), box.padding   = 0.35, point.padding = 0.5, segment.color = 'grey50')+
+  stat_smooth(method="lm", se=FALSE, colour="black", linetype="dashed", size=0.2, fullrange=TRUE, data=peakdensNN)+
+  xlab("mean CPUE at peak")+ylab("mortality (Z)")+
+  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "black"))
+#ggsave("mortVcpue_trend_LM_silentNAP.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+```
 
 **Growth vs. density**
-Visualize with labels
+Visualize another way to label.
 ```{r}
 #plot labels.
 peakdens2 %>%
@@ -249,13 +283,10 @@ Napeague 2010 (N10) does not seem like an outlier here. We will keep it.
 
 
 **Growth vs. density**
-compare log and linear fits
+WITH NAPEAGUE
 ```{r}
-
-### LOG FIT ###
-peakdens3 <-filter(peakdens2, cohort == "both")
-y <- peakdens3$growth
-x <-peakdens3$avProd
+y <- peakdens2$growth
+x <-peakdens2$avProd
 
 ### Linear fit ###
 #plot growth vs. mean cpue. log fit. 
@@ -263,8 +294,6 @@ linM <-lm(y~x)
 summary(linM)
 AIC(linM)
 peakdens2 %>%
-  filter(cohort == "both")%>%
-  #filter(BayYear != "Napeague 2010")%>%
   ggplot(aes(x=avProd,y=growth, label=alias, color=Bay)) +
   #geom_text()+
   geom_text_repel()+
@@ -274,28 +303,46 @@ peakdens2 %>%
   stat_smooth(method="lm", se=FALSE, colour="black", linetype="dashed", size=0.2, fullrange=TRUE)+
   xlab("mean CPUE at peak")+ylab("growth (G)")+ 
   theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "black"))
-#ggsave("growVcpue_trend_LM.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#ggsave("growVcpue_trend_LMNAP.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
+```
+
+
+###NO NAPEAGUE###
+```{r}
+y <- peakdensNN$growth
+x <-peakdensNN$avProd
 
 ### Linear fit NAPEAGUE REMOVED ###
-#plot growth vs. mean cpue. log fit. 
-peakdens3 <-filter(peakdens2, cohort == "both", BayYear != "Napeague 2010" )
 linM <-lm(y~x)
 summary(linM)
 AIC(linM)
-peakdens2 %>%
-  filter(cohort == "both")%>%
-  filter(BayYear != "Napeague 2010")%>%
+peakdensNN %>%
   ggplot(aes(x=avProd,y=growth, label=alias, color=Bay)) +
   #geom_text()+
   geom_text_repel()+
   #geom_label_repel(aes(label = alias, color=Bay), box.padding   = 0.35, label.size=NA, point.padding = 0.5, segment.color = 'grey50')+
   #geom_point(aes(color=Bay))+
   scale_color_manual(values=drabcolors)+
-  stat_smooth(method="lm", se=FALSE, colour="black", linetype="dashed", size=0.2, fullrange=TRUE, data=peakdens3)+
+  stat_smooth(method="lm", se=FALSE, colour="black", linetype="dashed", size=0.2, fullrange=TRUE)+
   xlab("mean CPUE at peak")+ylab("growth (G)")+ 
   theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "black"))
 #ggsave("growVcpue_trend_LM_NONAP.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+
+## NAPEAGUE SILENT ##
+peakdens2 %>%
+  ggplot(aes(x=avProd,y=growth, label=alias, color=Bay)) +
+  #geom_text()+
+  geom_text_repel()+
+  #geom_label_repel(aes(label = alias, color=Bay), box.padding   = 0.35, label.size=NA, point.padding = 0.5, segment.color = 'grey50')+
+  #geom_point(aes(color=Bay))+
+  scale_color_manual(values=drabcolors)+
+  stat_smooth(method="lm", se=FALSE, colour="black", linetype="dashed", size=0.2, fullrange=TRUE, data=peakdensNN)+
+  xlab("mean CPUE at peak")+ylab("growth (G)")+ 
+  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "black"))
+#ggsave("growVcpue_trend_LM_silentNAP.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 
 
