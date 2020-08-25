@@ -257,7 +257,7 @@ peakdens2 %>%
   #geom_point(aes(color=Bay))+
   scale_color_manual(values=drabcolors)+
   #geom_label_repel(aes(label = alias), box.padding   = 0.35, point.padding = 0.5, segment.color = 'grey50')+
-  stat_smooth(method="lm", se=FALSE, colour="black", linetype="dashed", size=0.2, fullrange=TRUE, data=peakdensNN)+
+  stat_smooth(method="lm", se=FALSE, colour="black", linetype="dashed", size=0.2, fullrange=FALSE, data=peakdensNN)+
   xlab("mean CPUE at peak")+ylab("mortality (Z)")+
   theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "black"))
 #ggsave("mortVcpue_trend_LM_silentNAP.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
@@ -333,16 +333,16 @@ peakdensNN %>%
 
 ## NAPEAGUE SILENT ##
 peakdens2 %>%
-  ggplot(aes(x=avProd,y=growth, label=alias, color=Bay)) +
+  ggplot(aes(x=avProd,y=growth, label=alias)) +
   #geom_text()+
   geom_text_repel()+
   #geom_label_repel(aes(label = alias, color=Bay), box.padding   = 0.35, label.size=NA, point.padding = 0.5, segment.color = 'grey50')+
   #geom_point(aes(color=Bay))+
   scale_color_manual(values=drabcolors)+
-  stat_smooth(method="lm", se=FALSE, colour="black", linetype="dashed", size=0.2, fullrange=TRUE, data=peakdensNN)+
+  stat_smooth(method="lm", se=FALSE, colour="black", linetype="dashed", size=0.2, fullrange=FALSE, data=peakdensNN)+
   xlab("mean CPUE at peak")+ylab("growth (G)")+ 
   theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "black"))
-#ggsave("growVcpue_trend_LM_silentNAP.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#ggsave("growVcpue_trend_LM_silentNAP_bw.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 
 
