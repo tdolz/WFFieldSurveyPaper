@@ -200,33 +200,13 @@ peakdens2 %>%
 ```
 From here we have decided to get rid of napeague 2010.
 
-**Compare Log and LM fits in mortality vs. abundance at peak**
+**Compare mortality vs. abundance at peak**
 without napeague 2010
 ```{r}
 ### LOG FIT ###
 peakdens3 <-filter(peakdens2, BayYear != "Napeague 2010", cohort=="both")
 y <- peakdens3$mortality
 x <-peakdens3$avProd
-a_start <-0.045
-b_start <-1
-m <-nls(y~b*log(x)+a, start=list(a=a_start, b=b_start))
-cor(y, predict(m))
-m  # we can just add the coefficients and rsquared manually in indesign.
-AIC(m)
-
-#plot mortality vs. mean cpue. log fit. 
-peakdens2 %>%
-  filter(cohort == "both")%>%
-  filter(BayYear != "Napeague 2010")%>%
-  ggplot(aes(x=avProd,y=mortality)) +
-  geom_point(aes(color=Bay))+
-  scale_color_manual(values=drabcolors)+
-  stat_smooth(method="nls", se=FALSE,colour="black", linetype="dashed", size=0.2, fullrange=TRUE, data=peakdens3,
-              method.args=list(formula=y ~ b*log(x)+a, start=list(a=0.045, b=1)))+ 
-  xlab("mean CPUE at peak")+ylab("mortality")+ ggtitle("Mortality vs. Mean CPUE")+
-  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "black"))
-#ggsave("mortVcpue_trend_LOG_noNap.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
-#dev.off()
 
 ### Linear fit ###
 #plot mortality vs. mean cpue. log fit. 
@@ -276,27 +256,6 @@ compare log and linear fits
 peakdens3 <-filter(peakdens2, cohort == "both")
 y <- peakdens3$growth
 x <-peakdens3$avProd
-a_start <-0.7
-b_start <--1
-m <-nls(y~b*log(x)+a, start=list(a=a_start, b=b_start))
-cor(y, predict(m))
-m  # we can just add the coefficients and rsquared manually in indesign.
-AIC(m)
-
-
-#plot growth vs. mean cpue. log fit. 
-peakdens2 %>%
-  filter(cohort == "both")%>%
-  #filter(BayYear != "Napeague 2010")%>%
-  ggplot(aes(x=avProd,y=growth)) +
-  geom_point(aes(color=Bay))+
-  scale_color_manual(values=drabcolors)+
-  stat_smooth(method="nls", se=FALSE,data=peakdens3,
-              method.args=list(formula=y ~ b*log(x)+a, start=list(a=0.7, b=-1)))+ 
-  xlab("mean CPUE at peak")+ylab("growth")+ ggtitle("growth vs. Mean CPUE")+
-  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "black"))
-#ggsave("growVcpue_trend_LOG.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
-#dev.off()
 
 ### Linear fit ###
 #plot growth vs. mean cpue. log fit. 
