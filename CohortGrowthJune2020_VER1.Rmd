@@ -1498,6 +1498,7 @@ This gives you a different result in the LS means. HOWEVER i think the other way
 
 **The LS means way**
 ```{r}
+all.co.shin <-unite(all.co.shin, YearCo, Year,co,remove=FALSE)
 yearsS <- lm(lncpue~past.peak*YearCo, data=all.co.shin, type=3, na.action=na.omit)
 anova(yearsS)
 #coefficients
@@ -1512,6 +1513,22 @@ p <- p %>% mutate(sigp = ifelse(p.value <= bonf.alpha,"sig","not sig"))
 p
 ```
  No significant pairwise differences. 
+ 
+ **HeatMap 4 Anne**
+ There is really no need to print this heatmap.
+```{r}
+cols <- c("(0,0.008]"="#034e7b", "(0.008,0.01]" = "#045a8d", "(0.01,0.05]" = "#2b8cbe", "(0.05,0.1]" = "#74a9cf", "(0.1,0.5]"  = "#a6bddb", "(0.5,1]"="#d0d1e6")
+p <- separate(p, contrast, c("bayyear1", "bayyear2"),sep="-")
+p<-mutate(p, p_if_sig=ifelse(sigp=="sig",p.value,NA), starsig=ifelse(sigp=="sig","*",NA)) 
+p<-mutate(p, p_value = cut(p.value, breaks=c(0,0.008, 0.01,0.05,0.1,0.5,1)))
+ggplot(p, aes(bayyear1,bayyear2, label=starsig))+
+  geom_tile(aes(fill=p_value), show.legend = TRUE)+
+  scale_fill_manual(values=cols)+
+  geom_text(color="white", size=3)+
+  xlab("")+ylab("")+
+  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "black"))
+ 
+```
 
 #Extract cohort catch curve estimates#
 ```{r, include=FALSE}
@@ -1689,17 +1706,17 @@ coco <-bind_rows(shinco, Mtco2016)%>%unite(BayYear, Bay, Year, sep=" ")
 
 #shinnecock - remember to turn star on or off. 
 coco %>%
-  filter(star=="star")%>%
+  #filter(star=="star")%>%
 ggplot(aes(y=value,x=Day))+
-  geom_point(aes(y=value,x=Day,fill=co,color=co))+
+  geom_point(aes(y=value,x=Day,fill=co,color=co),shape=20)+
   scale_x_discrete()+
-  geom_smooth(aes(group=co,y=value,x=Day,fill=co, color=co), method="lm", formula= my.formula, se=TRUE, fullrange=FALSE)+
+  geom_smooth(aes(group=co,y=value,x=Day,fill=co, color=co), method="lm", formula= my.formula, se=TRUE, fullrange=FALSE, size=0.5)+
   scale_fill_manual(values=cohortcolors)+scale_color_manual(values=cohortcolors)+
   #stat_poly_eq(formula = my.formula, aes(group=co,y=value,x=Day,label = paste(..eq.label.., ..rr.label.., sep = "~~~")), parse = TRUE) +     
   ylab("length (mm)")+
   facet_grid(~BayYear,scales="free_x")+
   theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))
-#ggsave("growthslopecoALL_starred.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#ggsave("growthslopecoALL_notstarred.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 
 ```
@@ -1738,9 +1755,9 @@ coco2 <-bind_rows(s16e,s16l,s17e,s17l,mt16e,mt16l)%>%unite(BayYear, Bay, Year, s
 coco2 %>%
   #filter(star=="star")%>%
 ggplot(aes(y=value,x=select.day))+
-  geom_point(aes(y=value,x=select.day, color=co))+
+  geom_point(aes(y=value,x=select.day, color=co), shape=20)+
   #scale_x_discrete()+
-  geom_smooth(aes(group=co,y=value,x=select.day,fill=co, color=co), method="lm", formula= my.formula, se=TRUE, fullrange=FALSE)+
+  geom_smooth(aes(group=co,y=value,x=select.day,fill=co, color=co), method="lm", formula= my.formula, se=TRUE, fullrange=FALSE, size=0.5)+
   scale_fill_manual(values=cohortcolors)+scale_color_manual(values=cohortcolors)+
   ylab("length (mm)")+ ggtitle("Shinnecock cohorts")+ xlab("Days since selection to the gear")+
   facet_grid(~BayYear,scales="free_x")+
@@ -1882,6 +1899,23 @@ bonf.alpha
 p <- as.data.frame(pairs(by.list)) %>% mutate(sigp = ifelse(p.value <= bonf.alpha,"sig","not sig"))
 p
 ```
+
+**Heatmap 4 Anne**
+Not really a reason to print this heatmap either. 
+```{r}
+cols <- c("(0,0.008]"="#034e7b", "(0.008,0.01]" = "#045a8d", "(0.01,0.05]" = "#2b8cbe", "(0.05,0.1]" = "#74a9cf", "(0.1,0.5]"  = "#a6bddb", "(0.5,1]"="#d0d1e6")
+p <- separate(p, contrast, c("bayyear1", "bayyear2"),sep="-")
+p<-mutate(p, p_if_sig=ifelse(sigp=="sig",p.value,NA), starsig=ifelse(sigp=="sig","*",NA)) 
+p<-mutate(p, p_value = cut(p.value, breaks=c(0,0.008, 0.01,0.05,0.1,0.5,1)))
+ggplot(p, aes(bayyear1,bayyear2, label=starsig))+
+  geom_tile(aes(fill=p_value), show.legend = TRUE)+
+  scale_fill_manual(values=cols)+
+  geom_text(color="white", size=3)+
+  xlab("")+ylab("")+
+  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "black"))
+```
+
+
 
 **Mattituck growth anova** We are only comparing 2016
 NOT LAGGED AND NOT STARRED.
@@ -2139,6 +2173,9 @@ bonf.alpha
 p <- as.data.frame(pairs(by.list)) %>% mutate(sigp = ifelse(p.value <= bonf.alpha,"sig","not sig"))
 p
 ```
+
+
+
 
 **Mattituck growth anova** We are only comparing 2016
 STARRED.
