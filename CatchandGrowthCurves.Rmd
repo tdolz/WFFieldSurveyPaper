@@ -223,6 +223,9 @@ Mt_all <-bind_rows(Mt_16,Mt_15)
 **Graph abundance for all years and bays:**
 You should add Mattituck in at some point, even though you don't have environmental data for it. 
 ```{r,fig.align='center', echo=FALSE}
+
+drabcolors <-c("#f6eff7","#d0d1e6","#a6bddb", "#67a9cf", "#1c9099", "#016450")
+
 #2017
 seventeen <-Sh_17%>% mutate(Date=as.Date(Date),Week=as.integer(Week))
 sunnycolors <-c("#5bd0c8")

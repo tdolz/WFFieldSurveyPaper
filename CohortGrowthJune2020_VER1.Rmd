@@ -58,8 +58,10 @@ library("tidyr")
 library("moments")
 library("lubridate")
 library("ggplot2")
-library("brms")
 library('purrr')
+library("agricolae")
+library("lsmeans")
+library("FSA")
 ```
 
 Load the data & some extra data minging. 
@@ -1004,6 +1006,33 @@ ggplot(aes(y=lncpue,x=Day))+
 
 ```
 
+**Plot them together**
+```{r}
+allslopes <-dplyr::select(all.co.shin,Day, Year, co, lncpue, Bay, past.peak)
+mtco <-dplyr::select(Mtcocatch, Day, Year,lncpue,co,past.peak) %>% mutate (Bay="Mattituck")
+allslopes <-bind_rows(allslopes, mtco)
+allslopes <-unite(allslopes, BayYear, Bay, Year,sep=" ", remove=FALSE)
+
+#facet plot. 
+my.formula <- y ~ x
+allslopes %>% 
+ggplot(aes(y=lncpue,x=Day))+
+  geom_point(aes(group=co,y=lncpue,x=Day,color=co, fill=co))+
+  scale_fill_manual(values=cohortcolors)+ scale_color_manual(values=cohortcolors)+
+  scale_x_discrete()+
+  geom_smooth(aes(group=co,y=lncpue,x=Day,color=co, fill=co), data=filter(allslopes, !is.na(past.peak)), method="lm", formula= my.formula, se=TRUE, fullrange=FALSE)+
+  ylab("LN CPUE")+
+  facet_wrap(~BayYear, scales="free_x")+
+  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = 'white', colour = 'light gray'),
+        panel.grid.major = element_line(colour = "white"))
+  #theme_classic()
+#ggsave("cohortslopesALL.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+#dev.off()
+
+```
+
+
+
 If it turns out that mortality is worse for the later cohort, it's good to have the days, and then with growth we have size at age. *There's something here about size by a certain date that we have to tease out of these datasets somehow.* 
 
 # Compare catch curves between cohorts with an LM # 
@@ -1081,8 +1110,8 @@ ggplot(p, aes(bayyear1,bayyear2, label=starsig))+
 #Extract cohort catch curve estimates#
 ```{r, include=FALSE}
 
-con <-as.data.frame(confint(cc_reg))
-ccN_10 <-bind_cols(ccN_10,con)
+#con <-as.data.frame(confint(cc_reg))
+#ccN_10 <-bind_cols(ccN_10,con)
 
 #Shi17_e
 ce_reg <-catchCurve(cpue~past.peak,data=shi17_e, ages2use=0:35, na.action=na.omit)
@@ -1174,18 +1203,22 @@ mt_slopes <-as.data.frame(mt_slopes)%>% unite(YearCo, Year, co, remove=FALSE)
 mtZ <-filter(mt_slopes, estimator=="Z")
 mt_slopes2 <-bind_rows(mtZ, ccZ)
 
+mt_slopes2 <- unite(mt_slopes2, BayYear, Bay, Year, sep=" ", remove=FALSE)
+
 mt_slopes2 %>%
+ #filter(Bay=="Mattituck")%>%
   ggplot(aes(x=YearCo, y=Estimate, fill=co)) +
   geom_bar(stat="identity",alpha=1)+
   geom_errorbar(aes(ymin=`95% LCI`, ymax=`95% UCI`),
                   width=.2,position=position_dodge(.9), colour="lightgrey")+
   scale_fill_manual(values=cohortcolors)+
-  #scale_fill_grey()+
   xlab("")+ylab("est. Z")+
-  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))+
-  facet_grid(~Bay, scales="free")
-#ggsave("comortalitybarplot.png", path="/Users/tdolan/Documents/Proposal/Figures")
+  facet_wrap(~BayYear, scales="free_x")+
+  theme(legend.position="none",axis.title.y = element_text(size = 10),axis.text.y = element_text(size = 10, angle = 0, hjust = 1, vjust = 0, face = "plain"), axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))
+  
+#ggsave("comortalitybarplotNEW.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
+  
 ```
 
 **Notes**
