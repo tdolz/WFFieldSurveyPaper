@@ -62,6 +62,8 @@ library('purrr')
 library("agricolae")
 library("lsmeans")
 library("FSA")
+library("chron")
+library("cowplot")
 ```
 
 Load the data & some extra data minging. 
@@ -961,11 +963,14 @@ cohortcolors <-c("#a6bddb","#1c9099")
 #facet plot. 
 my.formula <- y ~ x
 all.co.shin %>% 
-ggplot(aes(y=lncpue,x=Day))+
+  #mutate(Date = as.Date(Date))%>%
+  ggplot(aes(y=lncpue,x=Date))+
   geom_point(aes(group=co,y=lncpue,x=Day,color=co, fill=co))+
   #scale_fill_manual(values=wes_palette(n=2, name="GrandBudapest2"))+
   scale_fill_manual(values=cohortcolors)+ scale_color_manual(values=cohortcolors)+
-  scale_x_discrete()+
+  scale_x_discrete(breaks=c("06-01","07-01","08-04"),labels=c("June","July","August"))+
+  #scale_x_date(labels = date_format("%m/%d"),breaks = date_breaks("2 weeks"))+
+   #scale_x_date(date_breaks="2 weeks")+
   geom_smooth(aes(group=co,y=lncpue,x=Day,color=co, fill=co), data=filter(all.co.shin, !is.na(past.peak)), method="lm", formula= my.formula, se=TRUE, fullrange=FALSE)+
   #stat_poly_eq(formula = my.formula, 
        #     aes(group=co,y=lncpue,x=past.peak,label = paste(..eq.label.., ..rr.label.., sep = "~~~")), 
@@ -974,9 +979,9 @@ ggplot(aes(y=lncpue,x=Day))+
   #ylim()+
   facet_grid(~Year)+
   #facet_grid(co~Year)+
-  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = 'white', colour = 'light gray'),
-        panel.grid.major = element_line(colour = "white"))
-  #theme_classic()
+  #theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = 'white', colour = 'light gray'),
+        #panel.grid.major = element_line(colour = "white"))
+  theme_cowplot()
 #ggsave("cohortmortshin.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 ```
@@ -1019,12 +1024,15 @@ allslopes %>%
 ggplot(aes(y=lncpue,x=Day))+
   geom_point(aes(group=co,y=lncpue,x=Day,color=co, fill=co))+
   scale_fill_manual(values=cohortcolors)+ scale_color_manual(values=cohortcolors)+
-  scale_x_discrete()+
-  geom_smooth(aes(group=co,y=lncpue,x=Day,color=co, fill=co), data=filter(allslopes, !is.na(past.peak)), method="lm", formula= my.formula, se=TRUE, fullrange=FALSE)+
+  #scale_x_discrete()+
+  scale_x_discrete(breaks=c("06-02","07-11","08-08","06-01","07-01","08-04","06-02","07-05","08-02"),
+                   labels=c("June","July","August","June","July","August","June","July","August"))+
+  #geom_smooth(aes(group=co,y=lncpue,x=Day,color=co, fill=co), data=filter(allslopes, !is.na(past.peak)), method="lm", formula= my.formula, se=TRUE, fullrange=FALSE)+
   ylab("LN CPUE")+
   facet_wrap(~BayYear, scales="free_x")+
-  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = 'white', colour = 'light gray'),
-        panel.grid.major = element_line(colour = "white"))
+  #theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = 'white', colour = 'light gray'),
+       # panel.grid.major = element_line(colour = "white"))
+  theme_cowplot()
   #theme_classic()
 #ggsave("cohortslopesALL.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
@@ -1290,14 +1298,17 @@ coco %>%
   #filter(star=="star")%>%
 ggplot(aes(y=value,x=Day))+
   geom_point(aes(y=value,x=Day,fill=co,color=co),shape=20)+
-  scale_x_discrete()+
+  #scale_x_discrete()+
+   scale_x_discrete(breaks=c("06-02","07-11","08-08","06-01","07-01","08-04","06-02","07-05","08-02"),
+                   labels=c("June","July","August","June","July","August","June","July","August"))+
   geom_smooth(aes(group=co,y=value,x=Day,fill=co, color=co), method="lm", formula= my.formula, se=TRUE, fullrange=FALSE, size=0.5)+
   scale_fill_manual(values=cohortcolors)+scale_color_manual(values=cohortcolors)+
   #stat_poly_eq(formula = my.formula, aes(group=co,y=value,x=Day,label = paste(..eq.label.., ..rr.label.., sep = "~~~")), parse = TRUE) +     
   ylab("length (mm)")+
   facet_grid(~BayYear,scales="free_x")+
-  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))
-#ggsave("growthslopecoALL_notstarred.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+  theme_cowplot()
+  #theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))
+#ggsave("growthslopecoALL_notstarredMONTH.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 
 ```
@@ -1342,8 +1353,9 @@ ggplot(aes(y=value,x=select.day))+
   scale_fill_manual(values=cohortcolors)+scale_color_manual(values=cohortcolors)+
   ylab("length (mm)")+ ggtitle("Shinnecock cohorts")+ xlab("Days since selection to the gear")+
   facet_grid(~BayYear,scales="free_x")+
-  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))
-#ggsave("growthslopecoSH_lagged.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+  #theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))
+  theme_cowplot()
+#ggsave("growthslopecoSH_laggedMONTH.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 
 ```
