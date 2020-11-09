@@ -218,19 +218,124 @@ for(i in 1:length(b.store2)) {
 
 #plot occupied, available, both cohorts
 a <-  ggplot()
- a+geom_line(aes(x=Temp, y=OccCDF_final), color="#a6bddb", data=co16_1Temp)+
-   geom_line(aes(x=Temp, y=SurveyCDFFinal),linetype="dotted", data=shin16coTemp)+
+ a+geom_line(aes(x=Temp, y=OccCDF_final), color="#a6bddb", size = 0.7, data=co16_1Temp)+ #cohort 1
+   geom_line(aes(x=Temp, y=SurveyCDFFinal),linetype="dotted", size = 0.7, data=shin16coTemp)+ #available habitat. 
   #geom_line(aes(x=Temp,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
-  geom_ribbon(aes(x=Temp,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
-  geom_line(aes(x=Temp, y=OccCDF_final), color="#1c9099", data=co16_2Temp)+
-  geom_ribbon(aes(x=Temp,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  geom_ribbon(aes(x=Temp,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.2)+ #bootstrapped CI
+  geom_line(aes(x=Temp, y=OccCDF_final), color="#1c9099", size = 0.7, data=co16_2Temp)+  #cohort 2.
+  geom_ribbon(aes(x=Temp,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.2)+ #bootstrapped CI
   #geom_line(aes(x=Temp,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
   ylab("CDF")+xlab("Temperature (C)")+ggtitle("Shinnecock 2016")+
-  theme_classic()
+  #theme_classic()
+   theme(plot.title=element_text(size=16),axis.text = element_text(size = 16),axis.title = element_text(size = 16),
+         panel.background = element_rect(fill = 'white', colour = 'black'),
+        panel.grid.major = element_line(colour = "white"))+guides(fill = FALSE, colour = FALSE) 
+#,plot.margin=margin(0.5,1,0.5,0.5,"cm")
 #ggsave("cohortcdfs16_OccvAVTempCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 #save for later
 
+```
+
+Bob's addition: Are either cohort significantly different from available habitat? 
+
+```{r, eval=FALSE,include=FALSE,echo=FALSE}
+#TEST STATISTIC: DISTANCE BETWEEN COHORTS
+Dist_test<-abs(co16_1Temp$OccCDF_final-shin16coTemp$SurveyCDFFinal)
+Test.statistic<-max(Dist_test)
+Test.statistic
+
+#BOOTSTRAPPING TEST STATISTIC AND CONFIDENCE INTERVALS
+###Bootstrapping occupied CPUE to create new CDFS
+DistBoot<-abs(co16_1Temp$OccCDF_final-shin16coTemp$SurveyCDFFinal)#if not defined prior to running loop,
+TS.Boot<-max(DistBoot)  
+#defining variables
+catch1 <-co16_1Temp$coCatch #total catch in that TOW
+ybar1 <-mean(catch1)
+Pres1 <-co16_1Temp$Pres #Presence absence for that TOW
+TempOcc <-co16_1Temp$Temp
+TempAv <-shin16coTemp$Temp
+
+# THE BOOT LOOP
+#set.seed(1234)
+results<-c()
+boot.store1 <-vector("list",length(10000))
+boot.store2 <-vector("list",length(10000))
+for(i in 1:100000) {  
+  #Cohort 1
+  BootSampler1<-sample(catch1, length(catch1),replace=FALSE)  #catch cohort 1
+  TempBoot1<-(BootSampler1/ybar1)*(as.numeric(Pres1))*TempOcc 
+  CDFBoot1<-cumsum(TempBoot1)
+  SUMBoot1<-sum(TempBoot1)
+  CDFFinalBoot1<-CDFBoot1/SUMBoot1
+  boot.store1[[i]]<-CDFFinalBoot1
+  #Available
+  BootSampler2<-sample(TempAv, length(TempAv),replace=FALSE)  #available habitat.
+  CDFBoot2<-cumsum(BootSampler2)
+  SUMBoot2<-sum(BootSampler2)
+  CDFFinalBoot2<-CDFBoot2/SUMBoot2
+  boot.store2[[i]]<-CDFFinalBoot2
+  #Test statistic
+  DistBoot<-abs(CDFFinalBoot1-CDFFinalBoot2) #absolute value from bootstrapped and observed
+  results[i]<-max(DistBoot) #store them here
+  }
+summary(results)
+
+#SIGNIFICANCE TEST RESULT
+
+#what proportion of results have a greater max difference than observed difference? 0 have greater... that means they are statistically the same. 
+quantile(results, c(0.025,0.975)) # if something is outside the 95% CI it is SIGNIFICANTLY DIFFERENT, not signficantly the same. 
+#what proportion of results have a lesser max difference than observed difference? 0 have lesser... i don't really understand this test.  
+
+sum(results>abs(Test.statistic))/10000 ## See how many of the values in 'result'are more extreme than the observed value
+```
+
+Bobs occ vs available per cohort. Cohort 2. 
+```{r,eval=FALSE,include=FALSE,echo=FALSE}
+#TEST STATISTIC: DISTANCE BETWEEN COHORTS
+Dist_test<-abs(co16_2Temp$OccCDF_final-shin16coTemp$SurveyCDFFinal)
+Test.statistic<-max(Dist_test)
+Test.statistic
+
+#BOOTSTRAPPING TEST STATISTIC AND CONFIDENCE INTERVALS
+###Bootstrapping occupied CPUE to create new CDFS
+DistBoot<-abs(co16_2Temp$OccCDF_final-shin16coTemp$SurveyCDFFinal)#if not defined prior to running loop,
+TS.Boot<-max(DistBoot)  
+#defining variables
+catch2 <-co16_2Temp$coCatch #total catch in that TOW
+ybar2 <-mean(catch2)
+Pres2 <-co16_2Temp$Pres #Presence absence for that TOW
+TempOcc <-co16_2Temp$Temp
+TempAv <-shin16coTemp$Temp
+
+# THE BOOT LOOP
+set.seed(1234)
+results<-c()
+boot.store2 <-vector("list",length(10000))
+boot.storea <-vector("list",length(10000))
+for(i in 1:10000) {  
+  #Cohort 2
+  BootSampler2<-sample(catch2, length(catch2),replace=FALSE)  #catch cohort 1
+  TempBoot2<-(BootSampler2/ybar1)*(as.numeric(Pres2))*Temp2 
+  CDFBoot2<-cumsum(TempBoot2)
+  SUMBoot2<-sum(TempBoot2)
+  CDFFinalBoot2<-CDFBoot2/SUMBoot2
+  boot.store2[[i]]<-CDFFinalBoot2
+  #Available
+  BootSamplera<-sample(TempAv, length(TempAv),replace=FALSE)  #available habitat.
+  CDFBoota<-cumsum(BootSamplera)
+  SUMBoota<-sum(BootSamplera)
+  CDFFinalBoota<-CDFBoot2/SUMBoota
+  boot.storea[[i]]<-CDFFinalBoota
+  #Test statistic
+  DistBoot<-abs(CDFFinalBoot1-CDFFinalBoota) #absolute value from bootstrapped and observed
+  results[i]<-max(DistBoot) #store them here
+  }
+summary(results)
+quantile(results, c(0.025,0.975))
+
+#SIGNIFICANCE TEST RESULT
+sum(abs(results>abs(Test.statistic))/10000) ## See how many of the values in 'result'are more extreme than the observed value
 ```
 
 
@@ -352,19 +457,22 @@ for(i in 1:length(b.store2)) {
 
 #plot occupied, available, both cohorts
 a <-  ggplot()
- a+geom_line(aes(x=Temp, y=OccCDF_final), color="#a6bddb", data=co17_1Temp)+
-    geom_line(aes(x=Temp, y=SurveyCDFFinal),linetype="dotted", data=shin17coTemp)+
+ a+geom_line(aes(x=Temp, y=OccCDF_final), color="#a6bddb", size = 0.7, data=co17_1Temp)+
+    geom_line(aes(x=Temp, y=SurveyCDFFinal),linetype="dotted", size = 0.7, data=shin17coTemp)+
   #geom_line(aes(x=Temp,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
-  geom_ribbon(aes(x=Temp,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
+  geom_ribbon(aes(x=Temp,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.2)+ #bootstrapped CI
   geom_line(aes(x=Temp, y=OccCDF_final), color="#1c9099", data=co17_2Temp)+
-  geom_ribbon(aes(x=Temp,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  geom_ribbon(aes(x=Temp,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.2)+ #bootstrapped CI
   #geom_line(aes(x=Temp,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
   ylab("CDF")+xlab("Temperature (C)")+ggtitle("Shinnecock 2017")+
-  theme_classic()
+  theme(plot.title=element_text(size=16),axis.text = element_text(size = 16),axis.title = element_text(size = 16),
+         panel.background = element_rect(fill = 'white', colour = 'black'),
+        panel.grid.major = element_line(colour = "white"))+guides(fill = FALSE, colour = FALSE) 
 #ggsave("cohortcdfs17_OccvAVTempCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 
 ```
+
 
 **Percentiles**
 ```{r, warning=FALSE, echo=TRUE}
@@ -525,15 +633,17 @@ for(i in 1:length(b.store2)) {
 
 #plot occupied, available, both cohorts
 a <-  ggplot()
- a+geom_line(aes(x=DO, y=OccCDF_final), color="#a6bddb", data=co16_1DO)+
-   geom_line(aes(x=DO, y=SurveyCDFFinal),linetype="dotted", data=shin16coDO)+
+ a+geom_line(aes(x=DO, y=OccCDF_final), color="#a6bddb",size = 0.7, data=co16_1DO)+
+   geom_line(aes(x=DO, y=SurveyCDFFinal),linetype="dotted",size = 0.7, data=shin16coDO)+
   #geom_line(aes(x=DO,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
-  geom_ribbon(aes(x=DO,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
-  geom_line(aes(x=DO, y=OccCDF_final), color="#1c9099", data=co16_2DO)+
-  geom_ribbon(aes(x=DO,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  geom_ribbon(aes(x=DO,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.2)+ #bootstrapped CI
+  geom_line(aes(x=DO, y=OccCDF_final), color="#1c9099",size = 0.7, data=co16_2DO)+
+  geom_ribbon(aes(x=DO,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.2)+ #bootstrapped CI
   #geom_line(aes(x=DO,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
   ylab("CDF")+xlab("Dissolved Oxygen (mg/L)")+ggtitle("Shinnecock 2016")+
-  theme_classic()
+  theme(plot.title=element_text(size=16),axis.text = element_text(size = 16),axis.title = element_text(size = 16),
+         panel.background = element_rect(fill = 'white', colour = 'black'),
+        panel.grid.major = element_line(colour = "white"))+guides(fill = FALSE, colour = FALSE) 
 #ggsave("cohortcdfs16_OccvAVDOCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 #save for later
@@ -658,18 +768,20 @@ for(i in 1:length(b.store2)) {
 
 #plot occupied, available, both cohorts
 a <-  ggplot()
- a+geom_line(aes(x=DO, y=OccCDF_final), color="#a6bddb", data=co17_1DO)+
-    geom_line(aes(x=DO, y=SurveyCDFFinal),linetype="dotted", data=shin17coDO)+
+ a+geom_line(aes(x=DO, y=OccCDF_final), color="#a6bddb",size = 0.7, data=co17_1DO)+
+    geom_line(aes(x=DO, y=SurveyCDFFinal),linetype="dotted",size = 0.7, data=shin17coDO)+
   #geom_line(aes(x=DO,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
-  geom_ribbon(aes(x=DO,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
-  geom_line(aes(x=DO, y=OccCDF_final), color="#1c9099", data=co17_2DO)+
-  geom_ribbon(aes(x=DO,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  geom_ribbon(aes(x=DO,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.2)+ #bootstrapped CI
+  geom_line(aes(x=DO, y=OccCDF_final), color="#1c9099",size = 0.7, data=co17_2DO)+
+  geom_ribbon(aes(x=DO,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.2)+ #bootstrapped CI
   #geom_line(aes(x=DO,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
   ylab("CDF")+xlab("Dissolved Oxygen (mg/L)")+ggtitle("Shinnecock 2017")+
-  theme_classic()
+  theme(plot.title=element_text(size=16),axis.text = element_text(size = 16),axis.title = element_text(size = 16),
+         panel.background = element_rect(fill = 'white', colour = 'black'),
+        panel.grid.major = element_line(colour = "white"))+guides(fill = FALSE, colour = FALSE) 
 #ggsave("cohortcdfs17_OccvAVDOCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
-
+ 
 ```
 
 **Percentiles**
@@ -832,18 +944,21 @@ for(i in 1:length(b.store2)) {
 
 #plot occupied, available, both cohorts
 a <-  ggplot()
- a+geom_line(aes(x=SAL, y=OccCDF_final), color="#a6bddb", data=co16_1SAL)+
-   geom_line(aes(x=SAL, y=SurveyCDFFinal),linetype="dotted", data=shin16coSAL)+
+ a+geom_line(aes(x=SAL, y=OccCDF_final), color="#a6bddb",size = 0.7, data=co16_1SAL)+
+   geom_line(aes(x=SAL, y=SurveyCDFFinal),linetype="dotted",size = 0.7, data=shin16coSAL)+
   #geom_line(aes(x=SAL,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
-  geom_ribbon(aes(x=SAL,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
-  geom_line(aes(x=SAL, y=OccCDF_final), color="#1c9099", data=co16_2SAL)+
-  geom_ribbon(aes(x=SAL,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  geom_ribbon(aes(x=SAL,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.2)+ #bootstrapped CI
+  geom_line(aes(x=SAL, y=OccCDF_final), color="#1c9099",size = 0.7, data=co16_2SAL)+
+  geom_ribbon(aes(x=SAL,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.2)+ #bootstrapped CI
   #geom_line(aes(x=SAL,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
   ylab("CDF")+xlab("Salinity (ppt)")+ggtitle("Shinnecock 2016")+
-  theme_classic()
+  theme(plot.title=element_text(size=16),axis.text = element_text(size = 16),axis.title = element_text(size = 16),
+         panel.background = element_rect(fill = 'white', colour = 'black'),
+        panel.grid.major = element_line(colour = "white"))+guides(fill = FALSE, colour = FALSE) 
 #ggsave("cohortcdfs16_OccvAVSALCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 #save for later
+
 
 ```
 
@@ -967,18 +1082,19 @@ for(i in 1:length(b.store2)) {
 
 #plot occupied, available, both cohorts
 a <-  ggplot()
- a+geom_line(aes(x=SAL, y=OccCDF_final), color="#a6bddb", data=co17_1SAL)+
-    geom_line(aes(x=SAL, y=SurveyCDFFinal),linetype="dotted", data=shin17coSAL)+
+ a+geom_line(aes(x=SAL, y=OccCDF_final), color="#a6bddb",size = 0.7, data=co17_1SAL)+
+    geom_line(aes(x=SAL, y=SurveyCDFFinal),linetype="dotted",size = 0.7, data=shin17coSAL)+
   #geom_line(aes(x=SAL,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
-  geom_ribbon(aes(x=SAL,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
-  geom_line(aes(x=SAL, y=OccCDF_final), color="#1c9099", data=co17_2SAL)+
-  geom_ribbon(aes(x=SAL,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  geom_ribbon(aes(x=SAL,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.2)+ #bootstrapped CI
+  geom_line(aes(x=SAL, y=OccCDF_final), color="#1c9099",size = 0.7, data=co17_2SAL)+
+  geom_ribbon(aes(x=SAL,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.2)+ #bootstrapped CI
   #geom_line(aes(x=SAL,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
   ylab("CDF")+xlab("Salinity (ppt)")+ggtitle("Shinnecock 2017")+
-  theme_classic()
+  theme(plot.title=element_text(size=16),axis.text = element_text(size = 16),axis.title = element_text(size = 16),
+         panel.background = element_rect(fill = 'white', colour = 'black'),
+        panel.grid.major = element_line(colour = "white"))+guides(fill = FALSE, colour = FALSE) 
 #ggsave("cohortcdfs17_OccvAVSALCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
-
 ```
 
 **Percentiles**
@@ -1141,18 +1257,21 @@ for(i in 1:length(b.store2)) {
 
 #plot occupied, available, both cohorts
 a <-  ggplot()
- a+geom_line(aes(x=Depth, y=OccCDF_final), color="#a6bddb", data=co16_1Depth)+
-   geom_line(aes(x=Depth, y=SurveyCDFFinal),linetype="dotted", data=shin16coDepth)+
+ a+geom_line(aes(x=Depth, y=OccCDF_final), color="#a6bddb",size = 0.7, data=co16_1Depth)+
+   geom_line(aes(x=Depth, y=SurveyCDFFinal),linetype="dotted",size = 0.7, data=shin16coDepth)+
   #geom_line(aes(x=Depth,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
-  geom_ribbon(aes(x=Depth,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
-  geom_line(aes(x=Depth, y=OccCDF_final), color="#1c9099", data=co16_2Depth)+
-  geom_ribbon(aes(x=Depth,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  geom_ribbon(aes(x=Depth,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.2)+ #bootstrapped CI
+  geom_line(aes(x=Depth, y=OccCDF_final), color="#1c9099",size = 0.7, data=co16_2Depth)+
+  geom_ribbon(aes(x=Depth,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.2)+ #bootstrapped CI
   #geom_line(aes(x=Depth,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
   ylab("CDF")+xlab("Depth (m)")+ggtitle("Shinnecock 2016")+
-  theme_classic()
+  theme(plot.title=element_text(size=16),axis.text = element_text(size = 16),axis.title = element_text(size = 16),
+         panel.background = element_rect(fill = 'white', colour = 'black'),
+        panel.grid.major = element_line(colour = "white"))+guides(fill = FALSE, colour = FALSE) 
 #ggsave("cohortcdfs16_OccvAVDepthCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 #save for later
+
 
 ```
 
@@ -1274,15 +1393,17 @@ for(i in 1:length(b.store2)) {
 
 #plot occupied, available, both cohorts
 a <-  ggplot()
- a+geom_line(aes(x=Depth, y=OccCDF_final), color="#a6bddb", data=co17_1Depth)+
-    geom_line(aes(x=Depth, y=SurveyCDFFinal),linetype="dotted", data=shin17coDepth)+
+ a+geom_line(aes(x=Depth, y=OccCDF_final), color="#a6bddb",size = 0.7, data=co17_1Depth)+
+    geom_line(aes(x=Depth, y=SurveyCDFFinal),linetype="dotted",size = 0.7, data=shin17coDepth)+
   #geom_line(aes(x=Depth,y=meanboot1),linetype=3, color="#748499")+ # bootstrapped mean
-  geom_ribbon(aes(x=Depth,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.1)+ #bootstrapped CI
-  geom_line(aes(x=Depth, y=OccCDF_final), color="#1c9099", data=co17_2Depth)+
-  geom_ribbon(aes(x=Depth,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.1)+ #bootstrapped CI
+  geom_ribbon(aes(x=Depth,ymin=lcis1,ymax=ucis1),fill="#a6bddb",alpha=0.2)+ #bootstrapped CI
+  geom_line(aes(x=Depth, y=OccCDF_final), color="#1c9099",size = 0.7, data=co17_2Depth)+
+  geom_ribbon(aes(x=Depth,ymin=lcis2,ymax=ucis2),fill="#1c9099",alpha=0.2)+ #bootstrapped CI
   #geom_line(aes(x=Depth,y=meanboot2),linetype=3, color="#1c9099")+ # bootstrapped mean
   ylab("CDF")+xlab("Depth (m)")+ggtitle("Shinnecock 2017")+
-  theme_classic()
+  theme(plot.title=element_text(size=16),axis.text = element_text(size = 16),axis.title = element_text(size = 16),
+         panel.background = element_rect(fill = 'white', colour = 'black'),
+        panel.grid.major = element_line(colour = "white"))+guides(fill = FALSE, colour = FALSE) 
 #ggsave("cohortcdfs17_OccvAVDepthCI.png", path="/Users/tdolan/documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 
