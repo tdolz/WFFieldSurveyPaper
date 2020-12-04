@@ -609,6 +609,29 @@ ccZ %>%
 #dev.off()
 ```
 
+
+SURVEY VS. CAGE BARPLOTS. 
+```{r}
+cmpZ<-read.csv("compareZ.csv", na.strings="", header=TRUE)
+cmpZ <- na.omit(cmpZ)
+
+cmpZ <-as.data.frame(cmpZ)%>% unite(LocYear, Location, Year, sep=" ", remove=FALSE)
+
+cmpZ %>%
+  ggplot(aes(x=LocYear, y=A, fill=Location)) +
+  geom_bar(stat="identity",alpha=1)+
+  geom_errorbar(aes(ymin=`LCI.A`, ymax=`UCI.A`),
+                  width=.2,position=position_dodge(.9), colour="lightgrey")+
+  #scale_fill_manual(values=sunnycolors)+
+  #scale_fill_grey()+
+  xlab("")+ylab("Estimated % mortality")+
+  theme(panel.background = element_rect(fill = "white", colour = "white"))
+
+
+```
+
+
+
 **Add Lyndie's to the rest of the data for the ridges plots**
 ```{r, include=FALSE}
 lylen<-read.csv("lyndie_lengths.csv", na.strings="", header=TRUE)
