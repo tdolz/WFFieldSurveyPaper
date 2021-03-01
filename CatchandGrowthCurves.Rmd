@@ -80,6 +80,7 @@ library("moments")
 library("lubridate")
 library("ggplot2")
 library("purrr")
+library("forcats")
 ```
 
 Load the data & some extra data minging. 
@@ -595,17 +596,22 @@ knitr::kable(ccA, caption="Annual mortality (A %)")
 ```{r}
 sunnycolors <-c("#006600","#ec4847","#6600ff", "#e6df44", "#061283", "#5bd0c8")
 drabcolors <-c("#f6eff7","#d0d1e6","#a6bddb", "#67a9cf", "#1c9099", "#016450")
+okecolors <-c("#CC79A7","#E69F00", "#56B4E9", "#009E73", "#0072B2","#D55E00")
+procolors <-c("#a74b22","#c3a770","#96aad0","#0477c2","#a97f8f","#16631f")
 ccZ <-as.data.frame(ccZ)%>% unite(BayYear, Bay, Year, remove=FALSE)
+ccZ <-mutate(ccZ, BayYear = fct_relevel(BayYear,c("Jamaica_2010","Jamaica_2011","Jamaica_2016","Moriches_2010","Moriches_2011","Moriches_2016","Mattituck_2015","Mattituck_2016","Shinnecock_2010","Shinnecock_2011","Shinnecock_2016","Shinnecock_2017","Cold Spring Pond_2010","Napeague_2010","Napeague_2016")))
+
 ccZ %>%
   ggplot(aes(x=BayYear, y=Estimate, fill=Bay)) +
   geom_bar(stat="identity",alpha=1)+
   geom_errorbar(aes(ymin=`95% LCI`, ymax=`95% UCI`),
-                  width=.2,position=position_dodge(.9), colour="lightgrey")+
-  scale_fill_manual(values=drabcolors)+
+                  size= 0.2, width=.2,position=position_dodge(.9), colour="black")+
+  scale_fill_manual(values=procolors)+
   #scale_fill_grey()+
+  #scale_fill_viridis(discrete=TRUE)+
   xlab("")+ylab("est. Z")+
   theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))
-#ggsave("mortalitybarplot_drab.png", path="/Users/tdolan/Documents/Proposal/Figures")
+#ggsave("mortalitybarplot_muted.png", path="/Users/tdolan/Documents/Proposal/Figures")
 #dev.off()
 ```
 
@@ -664,6 +670,7 @@ library("ggridges")
 library("forcats")
 sunnycolors <-c("#ec4847","#6600ff", "#e6df44", "#061283", "#5bd0c8")
 drabcolors <-c("#d0d1e6","#a6bddb", "#67a9cf", "#1c9099", "#016450")
+procolors <-c("#a74b22","#c3a770","#96aad0","#0477c2","#a97f8f","#16631f")
 
 allmelt %>%
   filter(Year==2016, value <= 120, Week < 16)%>%
@@ -675,7 +682,7 @@ allmelt %>%
                       #position = "raincloud",
                       #scale=0.7
                       )+
-  scale_discrete_manual("point_color", values = drabcolors)+
+  scale_discrete_manual("point_color", values = procolors)+
   labs(x = "length (mm)",
        y = "Week",
        #title = "YOY Winter Flounder by length",
@@ -685,8 +692,11 @@ allmelt %>%
   scale_x_continuous(expand = c(0.01, 0)) +
   scale_fill_cyclical(breaks = c("Jamaica", "Mattituck","Moriches","Napeague", "Shinnecock"),
                       labels = c(`Jamaica` = "Jamaica",`Mattituck`="Mattituck", `Moriches` = "Moriches", Napeague="Napeague", Shinnecock="Shinnecock"),
-                      values = c("#d0d1e6","#a6bddb", "#67a9cf", "#1c9099", "#016450"), #drabcolors
+                      values = c("#a74b22","#c3a770","#96aad0","#0477c2","#a97f8f","#16631f"), #procolors
                       name = "Bay", guide = "legend") +
+  
+  facet_wrap(~Bay)+
+  
   theme_ridges(grid = FALSE)+
   theme(
     panel.grid.major = element_blank(), 
@@ -698,6 +708,91 @@ allmelt %>%
 #ggsave("allvir2016_drab.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 ```
+**2016, historidge plot**
+```{r,fig.align='center', echo=FALSE }
+allmelt %>%
+  filter(Year==2016, value <= 120, Week < 16)%>%
+  mutate(Week = fct_rev(as.factor(Week))) %>%
+  ggplot(aes(y=Week)) +
+  stat_binline(aes(x=value,fill=paste(Bay),point_color=Bay, point_fill=Bay),
+                      alpha = 0.8, color="white", from=0, to=130,quantile_lines = TRUE, quantiles = c(0.025, 0.975),
+                      #jittered_points=TRUE, scale=.95, rel_min_height=.01,
+                      #position = "raincloud",
+                      #scale=0.7
+                      )+
+  scale_discrete_manual("point_color", values = procolors)+
+  labs(x = "length (mm)",
+       y = "Week",
+       #title = "YOY Winter Flounder by length",
+       subtitle = "2016",
+       caption = "") +
+  #scale_y_discrete(expand = c(0.01, 0.5)) +
+  #scale_x_continuous(expand = c(0.01, 0.5)) +
+  scale_fill_cyclical(breaks = c("Jamaica", "Mattituck","Moriches","Napeague", "Shinnecock"),
+                      labels = c(`Jamaica` = "Jamaica",`Mattituck`="Mattituck", `Moriches` = "Moriches", Napeague="Napeague", Shinnecock="Shinnecock"),
+                      values = c("#a74b22","#c3a770","#96aad0","#0477c2","#a97f8f","#16631f"), #procolors
+                      name = "Bay", guide = "legend") +
+  theme_ridges(grid = FALSE)+
+  theme(
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "transparent",colour = NA),
+    plot.background = element_rect(fill = "transparent",colour = NA)
+  )
+
+
+```
+
+**all bayyears**
+**2016**
+```{r, fig.align='center', echo=FALSE}
+### Make the viridis plot for all the bays. 
+library("ggridges")
+library("forcats")
+sunnycolors <-c("#ec4847","#6600ff", "#e6df44", "#061283", "#5bd0c8")
+drabcolors <-c("#d0d1e6","#a6bddb", "#67a9cf", "#1c9099", "#016450")
+procolors <-c("#a74b22","#c3a770","#96aad0","#0477c2","#a97f8f","#16631f")
+
+allmelt %>%
+  filter(value <= 120, Week < 16, Year %in% c("2010","2011","2016"))%>%
+  mutate(Week = fct_rev(as.factor(Week))) %>%
+  ggplot(aes(y=Week)) +
+  stat_density_ridges(aes(x=value,fill=paste(Bay),point_color=Bay, point_fill=Bay),
+                      alpha = 0.8, color="white", from=0, to=130,quantile_lines = TRUE, quantiles = c(0.025, 0.975),
+                      #jittered_points=TRUE, scale=.95, rel_min_height=.01,
+                      #position = "raincloud",
+                      #scale=0.7
+                      )+
+  scale_discrete_manual("point_color", values = procolors)+
+  labs(x = "length (mm)",
+       y = "Week",
+       #title = "YOY Winter Flounder by length",
+       caption = "") +
+  scale_y_discrete(expand = c(0.01, 0)) +
+  scale_x_continuous(expand = c(0.01, 0)) +
+  scale_fill_cyclical(breaks = c("Jamaica", "Mattituck","Moriches","Napeague", "Shinnecock"),
+                      labels = c(`Jamaica` = "Jamaica",`Mattituck`="Mattituck", `Moriches` = "Moriches", Napeague="Napeague", Shinnecock="Shinnecock"),
+                      values = c("#a74b22","#c3a770","#96aad0","#0477c2","#a97f8f","#16631f"), #procolors
+                      name = "Bay", guide = "legend") +
+  
+  facet_grid(Year~Bay)+
+  
+  theme_ridges(grid = FALSE)+
+  theme(
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(),
+    panel.background = element_rect(fill = "transparent",colour = NA),
+    plot.background = element_rect(fill = "transparent",colour = NA)
+  )
+
+ggsave("allvirallyears_muted.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+dev.off()
+```
+
+
+
+
+
 
 **2011**
 ```{r, fig.align='center', echo=FALSE}
