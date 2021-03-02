@@ -657,14 +657,14 @@ normfits <- allmelt %>%
   filter(Bay == "Shinnecock")%>% filter(Year=="2017")%>%
   split(.$Week) %>% discard(function(df) length(df$value)<3)%>% purrr::map_dfr(function(df) normfit(df$value))
 normfits <- t(normfits)
-colnames(normfits) <- c("mean","std.err.mean","sd","std.err.sd","loglik","AIC","n")
+#colnames(normfits) <- c("mean","std.err.mean","sd","std.err.sd","loglik","AIC","n")
 
 #visparams
 vis_params <-allmelt %>%
   filter(Bay == "Shinnecock")%>% filter(Year=="2017")%>%
   split(.$Week) %>% purrr::map_dfr(function(df) vis_wk(df$value))
 vis_params <- t(vis_params)
-colnames(vis_params) <- c("mean_obs","var_obs","sd_obs","min_obs","max_obs")
+#colnames(vis_params) <- c("mean_obs","var_obs","sd_obs","min_obs","max_obs")
 
 #week1
 chrt_wk(split_df$`1`$value,26,50,1,5,0.1321875,	0.8678125)#10
@@ -731,14 +731,14 @@ normfits <- allmelt %>%
   filter(Bay == "Mattituck")%>% filter(Year=="2016")%>%
   split(.$Week) %>% discard(function(df) length(df$value)<3) %>% purrr::map_dfr(function(df) normfit(df$value))
 normfits <- t(normfits)
-colnames(normfits) <- c("mean","std.err.mean","sd","std.err.sd","loglik","AIC","n")
+#colnames(normfits) <- c("mean","std.err.mean","sd","std.err.sd","loglik","AIC","n")
 
 #visparams
 vis_params <-allmelt %>%
   filter(Bay == "Mattituck")%>% filter(Year=="2016")%>%
   split(.$Week) %>% purrr::map_dfr(function(df) vis_wk(df$value))
 vis_params <- t(vis_params)
-colnames(vis_params) <- c("mean_obs","var_obs","sd_obs","min_obs","max_obs")
+#colnames(vis_params) <- c("mean_obs","var_obs","sd_obs","min_obs","max_obs")
 
 #week3
 chrt_wk(split_df$`3`$value,35,50,2,1,0.7313829,	0.2686171)#10
@@ -1018,24 +1018,29 @@ mtco <-dplyr::select(Mtcocatch, Day, Year,lncpue,co,past.peak) %>% mutate (Bay="
 allslopes <-bind_rows(allslopes, mtco)
 allslopes <-unite(allslopes, BayYear, Bay, Year,sep=" ", remove=FALSE)
 
+cohortcolors2 <-c("#D55E00", "#0072B2")
+cohortcolors3 <-c("blue", "dark green")
+
 #facet plot. 
 my.formula <- y ~ x
 allslopes %>% 
 ggplot(aes(y=lncpue,x=Day))+
   geom_point(aes(group=co,y=lncpue,x=Day,color=co, fill=co))+
-  scale_fill_manual(values=cohortcolors)+ scale_color_manual(values=cohortcolors)+
-  #scale_x_discrete()+
-  scale_x_discrete(breaks=c("06-02","07-11","08-08","06-01","07-01","08-04","06-02","07-05","08-02"),
-                   labels=c("June","July","August","June","July","August","June","July","August"))+
-  #geom_smooth(aes(group=co,y=lncpue,x=Day,color=co, fill=co), data=filter(allslopes, !is.na(past.peak)), method="lm", formula= my.formula, se=TRUE, fullrange=FALSE)+
+  scale_fill_manual(values=cohortcolors2)+ scale_color_manual(values=cohortcolors2)+
+  scale_x_discrete()+
+ # scale_x_discrete(breaks=c("06-02","07-11","08-08","06-01","07-01","08-04","06-02","07-05","08-02"),
+  #labels=c("June","July","August","June","July","August","June","July","August"))+
+  geom_smooth(aes(group=co,y=lncpue,x=Day,color=co, fill=co), data=filter(allslopes, !is.na(past.peak)), method="lm", formula= my.formula, se=TRUE, fullrange=FALSE)+
   ylab("LN CPUE")+
   facet_wrap(~BayYear, scales="free_x")+
-  #theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = 'white', colour = 'light gray'),
-       # panel.grid.major = element_line(colour = "white"))
-  theme_cowplot()
-  #theme_classic()
-#ggsave("cohortslopesALL.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
-#dev.off()
+  theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = 'white', colour = 'black'),
+        axis.text.y=element_text(size=10),
+  panel.grid.major = element_line(colour = "transparent"),
+  strip.background =element_rect(fill="transparent"),
+  strip.text = element_text(size=10),
+  legend.position = "none")
+ggsave("cohortslopesALLblue.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+dev.off()
 
 ```
 
@@ -1297,19 +1302,24 @@ coco <-bind_rows(shinco, Mtco2016)%>%unite(BayYear, Bay, Year, sep=" ")
 coco %>%
   #filter(star=="star")%>%
 ggplot(aes(y=value,x=Day))+
-  geom_point(aes(y=value,x=Day,fill=co,color=co),shape=20)+
-  #scale_x_discrete()+
-   scale_x_discrete(breaks=c("06-02","07-11","08-08","06-01","07-01","08-04","06-02","07-05","08-02"),
-                   labels=c("June","July","August","June","July","August","June","July","August"))+
+  geom_point(aes(y=value,x=Day,fill=co,color=co),shape=20, alpha=0.5)+
+  scale_x_discrete()+
+   #scale_x_discrete(breaks=c("06-02","07-11","08-08","06-01","07-01","08-04","06-02","07-05","08-02"),
+  #labels=c("June","July","August","June","July","August","June","July","August"))+
   geom_smooth(aes(group=co,y=value,x=Day,fill=co, color=co), method="lm", formula= my.formula, se=TRUE, fullrange=FALSE, size=0.5)+
-  scale_fill_manual(values=cohortcolors)+scale_color_manual(values=cohortcolors)+
+  scale_fill_manual(values=cohortcolors2)+scale_color_manual(values=cohortcolors2)+
   #stat_poly_eq(formula = my.formula, aes(group=co,y=value,x=Day,label = paste(..eq.label.., ..rr.label.., sep = "~~~")), parse = TRUE) +     
   ylab("length (mm)")+
   facet_grid(~BayYear,scales="free_x")+
-  theme_cowplot()
-  #theme(axis.text.x = element_text(angle = 90),panel.background = element_rect(fill = "white", colour = "white"))
-#ggsave("growthslopecoALL_notstarredMONTH.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
-#dev.off()
+  theme(axis.text.x = element_text(size=9,angle = 90),
+  panel.background = element_rect(fill = 'white', colour = 'black'),
+  panel.grid.major = element_line(colour = "transparent"),
+  axis.text.y = element_text(size=10),
+  strip.background =element_rect(fill="transparent"),
+  strip.text = element_text(size=10),
+  legend.position = "none")
+ggsave("growthslopecoALL.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
+dev.off()
 
 ```
 Based on how these look there are not differences in shinnecock, but maybe differences in mattituck? how do we tell, except just like an anova. 
