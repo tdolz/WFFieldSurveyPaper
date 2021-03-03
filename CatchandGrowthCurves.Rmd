@@ -1001,6 +1001,11 @@ plot(typing.lsm[[2]])
 ```{r}
 cols <- c("(0,0.00048]"="#034e7b", "(0.00048,0.001]" = "#045a8d", "(0.001,0.01]" = "#2b8cbe", "(0.01,0.05]" = "#74a9cf", "(0.05,0.1]"  = "#a6bddb", "(0.1,0.5]"="#d0d1e6", "(0.5,1]" ="#f1eef6")
 p <- separate(p, contrast, c("bayyear1", "bayyear2"),sep="-")
+
+#p <-p %>%mutate(bayyear1 = fct_relevel(bayyear1,c("Jamaica_2010 ","Jamaica_2011 ","Jamaica_2016 ","Moriches_2010 ","Moriches_2011 ","Moriches_2016 ", "Mattituck_2015 ","Mattituck_2016 ","Shinnecock_2010 ","Shinnecock_2011 ","Shinnecock_2016 ","Cold Spring Pond_2010 ","Napeague_2010 ",   "Napeague_2016 ")))%>%
+#mutate(bayyear2=fct_relevel(bayyear2,c(" Jamaica_2010"," Jamaica_2011"," Jamaica_2016"," Moriches_2010"," Moriches_2011"," Moriches_2016", " Mattituck_2015"," Mattituck_2016"," Shinnecock_2010"," Shinnecock_2011"," Shinnecock_2016"," Shinnecock_2017"," Napeague_2010"," Napeague_2016")))
+
+
 p<-mutate(p, p_if_sig=ifelse(sigp=="sig",p.value,NA), starsig=ifelse(sigp=="sig","*",NA)) 
 p<-mutate(p, p_value = cut(p.value, breaks=c(0,0.00048, 0.001,0.01,0.05,0.1,0.5,1)))
 ggplot(p, aes(bayyear1,bayyear2, label=starsig))+
@@ -1025,11 +1030,15 @@ Try maybe not using num date, we need to create an edays function for this.
 #DATE seems to work, but i hope the program recognizes what it is. 
 #lets also try edays
 #date and edays give the same result, so that's good. 
+#
+allmelt.naomit <-filter(allmelt, !is.na(value), !is.na(Date))
+allmelt.naomit <-allmelt.naomit %>% base::split(.$BayYear)%>%
+ purrr::map_dfr(eday)
 
 
 library("purrr")
-models <-allmelt.naomit %>% dplyr::select(-X)%>% base::split(.$BayYear)%>%
- purrr::map(function(df) lm(value~Date,data = df))
+models <-allmelt.naomit %>% dplyr::select(-X)%>% filter(!is.na(eday))%>%base::split(.$BayYear)%>%
+ purrr::map(function(df) lm(value~edays,data = df))
 
 f <-models %>% map(summary) %>% map_dbl(~.$coefficients[2]) #slope
 g <-models %>% map(summary) %>% map_dbl(~.$coefficients[4]) #std error of the slope
@@ -1075,6 +1084,7 @@ gests %>%
 #ggsave("growthbarplot_muted.png", path="/Users/tdolan/Documents/WF SK PROJ/Survey data/Field Survey Paper/final figures")
 #dev.off()
 ```
+
 ```{r}
 drabcolors = c("#ece2f0","#d0d1e6","#a6bddb","#67a9cf","#02818a","#014636")
 #CSP, Jamaica, Mat, Moriches, Napeague, Shin
