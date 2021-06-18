@@ -1,4 +1,7 @@
 # WFFieldSurveyPaper
+
+This is the repo for the code used in the analysis for the paper "Winter Flounder Navigate the Postsettlement Gauntlet with a Bet-Hedging Strategy" in press in Marine and Coastal Fisheries. 
+
 compare mortality and growth between bays, cohort assignment, CDFS
 
 #CSV files#
@@ -17,16 +20,13 @@ uses somedata3_Mar-4-2020.csv, some_mt_data.csv, lyndie_lengths.csv, allmeltdec2
 -- Cohort assignment and catch and growth for cohorts in Mattituck 2016, Shinnecock 2016 and Shinnecock 2017 --
 uses skcompiled4gams2.csv but also lyndie-lengths, mattyage4.csv and some_mt_data
 #Updates needed#
-- We are using the "skcompiled4gams2.csv** but we should consider re-doing this using the "somedata_Mar-4-2020.csv" for consistency with the other scripts**
 - we should update the file paths for exporting figures
 - transfer the cohort assignment code to a gist/update current gist. 
 
 #COHORTCDFS.Rmd#  
 cdfs for cohorts. 
-- uses skcompiled4gams2.csv but we should change to somedata_Mar-4-2020.csv for consistency. 
 - uses allscoJune30.csv
 - need to make a gist of the CDF creation. 
 
 #taraCDFSBAYYEAR.Rmd#
 - need to create gist of the CDF creation
-- uses skcompiled4gams2,csv. you should update to use somedata3_Mar-4-2020.csv. 
