@@ -1,6 +1,6 @@
 # WFFieldSurveyPaper
 
-This is the repo for the code used in the analysis for the paper "Winter Flounder Navigate the Postsettlement Gauntlet with a Bet-Hedging Strategy" in press in Marine and Coastal Fisheries. 
+**This is the repo for the code used in the analysis for the paper "Winter Flounder Navigate the Postsettlement Gauntlet with a Bet-Hedging Strategy" in press in Marine and Coastal Fisheries. It still needs a lot of editing. Please feel free to email me at dolan.tara.e@gmail.com if you have questions about it. Not all of the code contained in this repo made it into the final analysis for the publication** 
 
 compare mortality and growth between bays, cohort assignment, CDFS
 
